@@ -1,0 +1,7 @@
+.env_key
+.env
+venv/
+__pycache__/
+*.pyc
+server.log
+temp_workspace/

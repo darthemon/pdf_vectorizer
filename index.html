@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanned PDF to Vector PDF Engine (Pure Client-Side)</title>
+    <!-- 외부 필수 라이브러리 (Client-Side 전용 CDN) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root {
+            --bg-main: #0b0f19;
+            --bg-card: #111827;
+            --bg-sub: #1e293b;
+            --border: #334155;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 30px 16px;
+        }
+        .container {
+            width: 100%;
+            max-width: 820px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.55);
+        }
+
+        /* 상단 헤더 */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 22px;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .title-group h1 {
+            font-size: 1.45rem;
+            font-weight: 700;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .badge-client {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: 6px;
+            vertical-align: middle;
+        }
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-top: 4px;
+        }
+
+        /* 설정 패널 */
+        .config-card {
+            background: rgba(30, 41, 59, 0.45);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 24px;
+        }
+        .config-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: #e2e8f0;
+        }
+        .config-header span { display: flex; align-items: center; gap: 6px; }
+        .config-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        @media (max-width: 640px) {
+            .config-grid { grid-template-columns: 1fr; }
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+        .form-label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+        .input-control, .select-control {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 8px 11px;
+            border-radius: 8px;
+            font-size: 0.84rem;
+            outline: none;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            font-family: inherit;
+        }
+        .input-control:focus, .select-control:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+        .input-with-action {
+            display: flex;
+            gap: 6px;
+        }
+        .input-with-action input { flex: 1; }
+        .btn-mini {
+            background: #334155;
+            color: #f8fafc;
+            border: 1px solid #475569;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.15s;
+        }
+        .btn-mini:hover {
+            background: #475569;
+            color: #fff;
+        }
+        .btn-mini:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* 파일 드롭존 */
+        .drop-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 38px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: rgba(30, 41, 59, 0.35);
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: var(--accent);
+            background: rgba(59, 130, 246, 0.08);
+        }
+        .drop-zone svg { stroke: #60a5fa; margin-bottom: 8px; }
+        .drop-zone p { color: var(--text-muted); font-size: 0.92rem; }
+        .drop-zone strong { color: var(--accent); }
+        input[type="file"] { display: none; }
+
+        /* 파일 분석 통계 패널 */
+        .analysis-panel {
+            display: none;
+            margin-top: 20px;
+            background: var(--bg-sub);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .file-info-header {
+            font-size: 0.95rem;
+            font-weight: 600;
+            word-break: break-all;
+            margin-bottom: 12px;
+            color: #f1f5f9;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .stat-box {
+            background: var(--bg-card);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+        .stat-label { font-size: 0.76rem; color: var(--text-muted); margin-bottom: 4px; }
+        .stat-value { font-size: 1.15rem; font-weight: 700; color: var(--text-main); }
+        .stat-value.highlight { color: #60a5fa; }
+
+        .btn-group { display: flex; gap: 10px; }
+        .btn {
+            flex: 1;
+            padding: 12px 18px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-primary { background: var(--accent); color: #fff; }
+        .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+        .btn-secondary { background: #334155; color: var(--text-main); flex: 0.35; }
+        .btn-secondary:hover:not(:disabled) { background: #475569; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* 프로그레스 & 상태 */
+        .progress-section { display: none; margin-top: 24px; }
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+            color: var(--text-muted);
+        }
+        .progress-track {
+            width: 100%;
+            height: 10px;
+            background: var(--bg-sub);
+            border-radius: 99px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+        .progress-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--success));
+            transition: width 0.3s ease;
+        }
+        .log-terminal {
+            background: #05080f;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px;
+            height: 220px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 0.82rem;
+            line-height: 1.55;
+            color: #cbd5e1;
+        }
+        .log-entry { margin-bottom: 4px; }
+        .log-time { color: #64748b; margin-right: 8px; }
+        .log-success { color: var(--success); font-weight: 600; }
+        .log-error { color: var(--danger); font-weight: 600; }
+        .log-warn { color: var(--warning); font-weight: 600; }
+
+        /* 결과 다운로드 영역 */
+        .result-panel {
+            display: none;
+            margin-top: 24px;
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 12px;
+            padding: 22px;
+            text-align: center;
+        }
+        .result-title {
+            color: #34d399;
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .result-desc {
+            color: #94a3b8;
+            font-size: 0.88rem;
+            margin-bottom: 18px;
+        }
+        .export-btn-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn-export {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 11px 18px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.15s;
+        }
+        .btn-pdf { background: #2563eb; color: #fff; }
+        .btn-pdf:hover { background: #1d4ed8; }
+        .btn-print { background: #059669; color: #fff; }
+        .btn-print:hover { background: #047857; }
+        .btn-md { background: #475569; color: #fff; }
+        .btn-md:hover { background: #334155; }
+        .btn-html { background: #7c3aed; color: #fff; }
+        .btn-html:hover { background: #6d28d9; }
+
+        /* 문서 미리보기 컨테이너 (인쇄 및 렌더링용) */
+        #renderedPreview {
+            display: none;
+            background: #ffffff;
+            color: #111827;
+            padding: 30px;
+            margin-top: 24px;
+            border-radius: 10px;
+            text-align: left;
+            font-family: 'Noto Sans CJK KR', 'Malgun Gothic', sans-serif;
+            font-size: 10.5pt;
+            line-height: 1.65;
+        }
+        #renderedPreview h1, #renderedPreview h2, #renderedPreview h3 {
+            color: #0f172a;
+            margin-top: 1.4em;
+            margin-bottom: 0.6em;
+            page-break-after: avoid;
+        }
+        #renderedPreview h1 { font-size: 18pt; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 6px; }
+        #renderedPreview h2 { font-size: 14pt; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+        #renderedPreview table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 14px 0;
+            font-size: 9.5pt;
+            page-break-inside: avoid;
+        }
+        #renderedPreview th, #renderedPreview td {
+            border: 1px solid #94a3b8;
+            padding: 7px 10px;
+            text-align: left;
+            vertical-align: top;
+        }
+        #renderedPreview th { background-color: #f1f5f9; font-weight: 700; }
+        #renderedPreview tr:nth-child(even) td { background-color: #f8fafc; }
+        #renderedPreview pre {
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 9pt;
+            page-break-inside: avoid;
+        }
+        #renderedPreview blockquote {
+            border-left: 4px solid #64748b;
+            margin: 10px 0;
+            padding: 4px 12px;
+            color: #334155;
+            background: #f8fafc;
+        }
+        #renderedPreview .mermaid {
+            display: flex;
+            justify-content: center;
+            margin: 18px 0;
+            page-break-inside: avoid;
+        }
+        .page-divider {
+            page-break-before: always;
+            height: 0;
+            margin: 20px 0;
+            border: none;
+            border-top: 1px dashed #cbd5e1;
+        }
+
+        @media print {
+            body * { visibility: hidden; }
+            #renderedPreview, #renderedPreview * { visibility: visible; }
+            #renderedPreview {
+                display: block !important;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            .page-divider { border-top: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 1. 헤더 -->
+        <div class="top-bar">
+            <div class="title-group">
+                <h1>Scanned PDF → Vector PDF <span class="badge-client">GitHub Pages 100% Client-Side</span></h1>
+                <p class="subtitle">OpenAI-Compatible Vision REST API (Google AI Studio & MindLogic FactChat Gateway)</p>
+            </div>
+        </div>
+
+        <!-- 2. 다중 프로바이더 & API 설정 패널 -->
+        <div class="config-card">
+            <div class="config-header">
+                <span>⚙️ API Provider & Model Configuration (브라우저 로컬 저장)</span>
+                <span style="font-size: 0.74rem; color: #94a3b8; font-weight: normal;">🔒 키는 외부 서버로 전송되지 않고 브라우저에만 유지됩니다</span>
+            </div>
+            <div class="config-grid">
+                <!-- 프로바이더 선택 -->
+                <div class="form-group">
+                    <label class="form-label" for="providerSelect">프로바이더 선택</label>
+                    <select id="providerSelect" class="select-control">
+                        <option value="google" selected>Google AI Studio</option>
+                        <option value="factchat">FactChat (기본)</option>
+                        <option value="factchat-cloud">FactChat (Cloud Gateway)</option>
+                        <option value="custom">Custom (직접 입력)</option>
+                    </select>
+                </div>
+
+                <!-- 병렬 처리 배수 -->
+                <div class="form-group">
+                    <label class="form-label" for="concurrencySelect">병렬 처리 배수 (동시 비전 요청)</label>
+                    <select id="concurrencySelect" class="select-control">
+                        <option value="1">1 (1배속/순차 안전)</option>
+                        <option value="2">2 (2배속)</option>
+                        <option value="4" selected>4 (4배속/권장 기본값)</option>
+                        <option value="8">8 (8배속/고속)</option>
+                        <option value="12">12 (12배속/최대)</option>
+                    </select>
+                </div>
+
+                <!-- Base URL -->
+                <div class="form-group full-width">
+                    <label class="form-label" for="baseUrlInput">API Base URL (OpenAI 규격 엔드포인트)</label>
+                    <input type="text" id="baseUrlInput" class="input-control" value="https://generativelanguage.googleapis.com/v1beta/openai" placeholder="https://...">
+                </div>
+
+                <!-- API 키 입력칸 (자동 감지 지원) -->
+                <div class="form-group full-width">
+                    <label class="form-label" for="apiKeyInput">API Key (AIza...: Google 자동 감지 / sk-fc-...: FactChat 자동 감지)</label>
+                    <div class="input-with-action">
+                        <input type="password" id="apiKeyInput" class="input-control" placeholder="Google AI Studio (AIza...) 또는 FactChat (sk-fc-...) 키 입력" autocomplete="off">
+                        <button type="button" class="btn-mini" id="toggleKeyVisibilityBtn">표시</button>
+                    </div>
+                </div>
+
+                <!-- 모델 선택 & 새로고침 -->
+                <div class="form-group full-width">
+                    <label class="form-label" for="modelSelect">사용 모델 선택</label>
+                    <div class="input-with-action">
+                        <select id="modelSelect" class="select-control" style="flex: 1;">
+                            <optgroup label="권장 기본 모델">
+                                <option value="gemini-3.5-flash-lite" selected>gemini-3.5-flash-lite (초고속/저비용)</option>
+                                <option value="gemini-3.8-flash">gemini-3.8-flash (고품질/복합 구조)</option>
+                            </optgroup>
+                            <optgroup label="API 키 제공 모델" id="dynamicModelsGroup"></optgroup>
+                            <option value="custom">직접 모델명 입력...</option>
+                        </select>
+                        <button type="button" class="btn-mini" id="refreshModelsBtn" title="제공업체에서 사용 가능한 모델 목록을 실시간 조회합니다">🔄 모델 목록 새로고침</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 파일 드롭존 -->
+        <div class="drop-zone" id="dropZone">
+            <svg width="40" height="40" fill="none" stroke-width="1.8" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/>
+            </svg>
+            <p>스캔된 PDF 파일을 이곳에 드래그하거나 <strong>클릭하여 선택</strong>하세요</p>
+            <p style="font-size: 0.78rem; color: #64748b; margin-top: 4px;">파일은 서버로 전송되지 않고 사용자의 브라우저 내에서 직접 처리됩니다.</p>
+            <input type="file" id="fileInput" accept="application/pdf">
+        </div>
+
+        <!-- 4. 파일 분석 및 시작 패널 -->
+        <div class="analysis-panel" id="analysisPanel">
+            <div class="file-info-header" id="fileNameDisplay">-</div>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-label">파일 용량</div>
+                    <div class="stat-value" id="fileSizeDisplay">-</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">총 페이지 수</div>
+                    <div class="stat-value" id="pageCountDisplay">-</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label" id="estTimeLabel">병렬 예상 시간</div>
+                    <div class="stat-value highlight" id="estTimeDisplay">-</div>
+                </div>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-secondary" id="resetBtn">파일 변경</button>
+                <button class="btn btn-primary" id="startBtn">병렬 변환 시작</button>
+            </div>
+        </div>
+
+        <!-- 5. 진행 상태 및 실시간 터미널 로그 -->
+        <div class="progress-section" id="progressSection">
+            <div class="progress-header">
+                <span id="statusText">준비 중...</span>
+                <span id="percentText">0%</span>
+            </div>
+            <div class="progress-track">
+                <div class="progress-fill" id="progressBar"></div>
+            </div>
+            <div class="log-terminal" id="logTerminal"></div>
+        </div>
+
+        <!-- 6. 변환 완료 결과 및 내보내기 액션 패널 -->
+        <div class="result-panel" id="resultPanel">
+            <div class="result-title">🎉 벡터 PDF 및 마크다운 변환 완료!</div>
+            <div class="result-desc" id="resultSummaryText">모든 페이지의 구조 및 다이어그램 복원이 완료되었습니다. 원하는 형식으로 저장하세요.</div>
+            <div class="export-btn-group">
+                <button class="btn-export btn-pdf" id="downloadPdfBtn">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9.75v6.75m0 0l-3-3m3 3l3-3m-8.25 6h16.5A2.25 2.25 0 0022.5 17.25V6.75A2.25 2.25 0 0020.25 4.5H3.75A2.25 2.25 0 001.5 6.75v10.5A2.25 2.25 0 003.75 19.5z"/></svg>
+                    벡터 PDF 다운로드
+                </button>
+                <button class="btn-export btn-print" id="printDocBtn">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659"/></svg>
+                    브라우저 고품질 인쇄 (PDF 저장)
+                </button>
+                <button class="btn-export btn-md" id="downloadMdBtn">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+                    Markdown (.md) 저장
+                </button>
+                <button class="btn-export btn-html" id="downloadHtmlBtn">
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"/></svg>
+                    완결형 HTML 저장
+                </button>
+            </div>
+        </div>
+
+        <!-- 7. 실제 렌더링된 문서 컨테이너 (인쇄 및 PDF 캡처용) -->
+        <div id="renderedPreview"></div>
+    </div>
+
+    <script>
+        // PDF.js 워커 세팅
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+
+        // DOM 요소 참조
+        const providerSelect = document.getElementById('providerSelect');
+        const concurrencySelect = document.getElementById('concurrencySelect');
+        const baseUrlInput = document.getElementById('baseUrlInput');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const toggleKeyVisibilityBtn = document.getElementById('toggleKeyVisibilityBtn');
+        const modelSelect = document.getElementById('modelSelect');
+        const dynamicModelsGroup = document.getElementById('dynamicModelsGroup');
+        const refreshModelsBtn = document.getElementById('refreshModelsBtn');
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const analysisPanel = document.getElementById('analysisPanel');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        const fileSizeDisplay = document.getElementById('fileSizeDisplay');
+        const pageCountDisplay = document.getElementById('pageCountDisplay');
+        const estTimeLabel = document.getElementById('estTimeLabel');
+        const estTimeDisplay = document.getElementById('estTimeDisplay');
+        const startBtn = document.getElementById('startBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        const progressSection = document.getElementById('progressSection');
+        const progressBar = document.getElementById('progressBar');
+        const statusText = document.getElementById('statusText');
+        const percentText = document.getElementById('percentText');
+        const logTerminal = document.getElementById('logTerminal');
+
+        const resultPanel = document.getElementById('resultPanel');
+        const resultSummaryText = document.getElementById('resultSummaryText');
+        const downloadPdfBtn = document.getElementById('downloadPdfBtn');
+        const printDocBtn = document.getElementById('printDocBtn');
+        const downloadMdBtn = document.getElementById('downloadMdBtn');
+        const downloadHtmlBtn = document.getElementById('downloadHtmlBtn');
+        const renderedPreview = document.getElementById('renderedPreview');
+
+        // 프로바이더별 기본 Base URL 맵
+        const PROVIDER_BASE_URLS = {
+            'google': 'https://generativelanguage.googleapis.com/v1beta/openai',
+            'factchat': 'https://api.factchat.ai/v1',
+            'factchat-cloud': 'https://factchat-cloud.mindlogic.ai/v1/gateway'
+        };
+
+        // 모델별 처리 시간 가중치 (초)
+        const MODEL_BASE_SEC = {
+            'gemini-3.5-flash-lite': 4.0,
+            'gemini-3.8-flash': 5.5,
+            'default': 7.0
+        };
+
+        // 전역 상태
+        let currentFile = null;
+        let currentPdfDoc = null;
+        let currentTotalPages = 0;
+        let extractedPages = [];
+        let isProcessing = false;
+        let abortRequested = false;
+
+        // 1. 설정 로컬스토리지 입출력 및 이벤트 바인딩
+        const CONFIG_KEY = 'scanned_pdf_vectorizer_config_v2';
+
+        function loadSavedConfig() {
+            try {
+                const raw = localStorage.getItem(CONFIG_KEY);
+                if (!raw) return;
+                const cfg = JSON.parse(raw);
+                if (cfg.provider) providerSelect.value = cfg.provider;
+                if (cfg.baseUrl) baseUrlInput.value = cfg.baseUrl;
+                if (cfg.apiKey) apiKeyInput.value = cfg.apiKey;
+                if (cfg.concurrency) concurrencySelect.value = cfg.concurrency;
+                if (cfg.model) {
+                    // 옵션이 없으면 임시 추가
+                    let opt = Array.from(modelSelect.options).find(o => o.value === cfg.model);
+                    if (!opt) {
+                        opt = document.createElement('option');
+                        opt.value = cfg.model;
+                        opt.textContent = cfg.model;
+                        dynamicModelsGroup.appendChild(opt);
+                    }
+                    modelSelect.value = cfg.model;
+                }
+            } catch (e) {}
+        }
+
+        function saveConfig() {
+            try {
+                const cfg = {
+                    provider: providerSelect.value,
+                    baseUrl: baseUrlInput.value.trim(),
+                    apiKey: apiKeyInput.value.trim(),
+                    concurrency: concurrencySelect.value,
+                    model: modelSelect.value
+                };
+                localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
+            } catch (e) {}
+        }
+
+        function handleProviderChange() {
+            const provider = providerSelect.value;
+            if (PROVIDER_BASE_URLS[provider]) {
+                baseUrlInput.value = PROVIDER_BASE_URLS[provider];
+                baseUrlInput.readOnly = false;
+            } else if (provider === 'custom') {
+                baseUrlInput.readOnly = false;
+                baseUrlInput.focus();
+            }
+            saveConfig();
+        }
+
+        providerSelect.addEventListener('change', handleProviderChange);
+        baseUrlInput.addEventListener('input', saveConfig);
+
+        // API 키 입력 시 자동 프로바이더 감지 로직
+        apiKeyInput.addEventListener('input', (e) => {
+            const val = e.target.value.trim();
+            if (val.startsWith('AIza')) {
+                if (providerSelect.value !== 'google') {
+                    providerSelect.value = 'google';
+                    baseUrlInput.value = PROVIDER_BASE_URLS['google'];
+                    appendLog('💡 Google AI Studio API 키(AIza...)가 감지되어 프로바이더가 자동 설정되었습니다.');
+                }
+            } else if (val.startsWith('sk-fc-')) {
+                if (providerSelect.value !== 'factchat' && providerSelect.value !== 'factchat-cloud') {
+                    providerSelect.value = 'factchat';
+                    baseUrlInput.value = PROVIDER_BASE_URLS['factchat'];
+                    appendLog('💡 FactChat API 키(sk-fc-...)가 감지되어 프로바이더가 자동 설정되었습니다.');
+                }
+            }
+            saveConfig();
+        });
+
+        toggleKeyVisibilityBtn.addEventListener('click', () => {
+            if (apiKeyInput.type === 'password') {
+                apiKeyInput.type = 'text';
+                toggleKeyVisibilityBtn.textContent = '숨김';
+            } else {
+                apiKeyInput.type = 'password';
+                toggleKeyVisibilityBtn.textContent = '표시';
+            }
+        });
+
+        concurrencySelect.addEventListener('change', () => {
+            saveConfig();
+            updateEstimatedTimeDisplay();
+        });
+
+        modelSelect.addEventListener('change', () => {
+            if (modelSelect.value === 'custom') {
+                const customModel = prompt('사용할 모델 ID를 정확히 입력하세요:', 'gemini-3.5-flash-lite');
+                if (customModel && customModel.trim()) {
+                    const opt = document.createElement('option');
+                    opt.value = customModel.trim();
+                    opt.textContent = customModel.trim();
+                    opt.selected = true;
+                    dynamicModelsGroup.appendChild(opt);
+                } else {
+                    modelSelect.value = 'gemini-3.5-flash-lite';
+                }
+            }
+            saveConfig();
+            updateEstimatedTimeDisplay();
+        });
+
+        // 2. 모델 목록 새로고침 (${baseUrl}/models)
+        refreshModelsBtn.addEventListener('click', async () => {
+            const baseUrl = baseUrlInput.value.trim().replace(/\/+$/, '');
+            const apiKey = apiKeyInput.value.trim();
+
+            if (!apiKey) {
+                alert('모델 목록을 조회하려면 먼저 상단에 API 키를 입력해주세요.');
+                apiKeyInput.focus();
+                return;
+            }
+
+            refreshModelsBtn.disabled = true;
+            refreshModelsBtn.textContent = '조회 중...';
+
+            try {
+                const res = await fetch(`${baseUrl}/models`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+
+                if (!res.ok) {
+                    const errText = await res.text();
+                    throw new Error(`HTTP ${res.status}: ${errText}`);
+                }
+
+                const data = await res.json();
+                let models = [];
+
+                if (Array.isArray(data.data)) {
+                    models = data.data.map(m => m.id || m.name);
+                } else if (Array.isArray(data.models)) {
+                    models = data.models.map(m => m.name || m.id);
+                }
+
+                if (models.length === 0) {
+                    alert('조회된 모델 목록이 비어있습니다.');
+                    return;
+                }
+
+                // 프리셋 모델 제외 중복 제거 후 추가
+                const existing = new Set(['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'custom']);
+                dynamicModelsGroup.innerHTML = '';
+                models.sort().forEach(m => {
+                    const cleanName = m.replace(/^models\//, '');
+                    if (!existing.has(cleanName)) {
+                        const opt = document.createElement('option');
+                        opt.value = cleanName;
+                        opt.textContent = cleanName;
+                        dynamicModelsGroup.appendChild(opt);
+                    }
+                });
+
+                alert(`총 ${models.length}개 모델을 성공적으로 동기화했습니다!`);
+                appendLog(`✔ 모델 목록 새로고침 완료: 총 ${models.length}개 모델 로드됨.`, 'success');
+            } catch (err) {
+                alert(`모델 목록 조회 실패:\n${err.message}\n\nBase URL과 API 키가 올바른지 확인하세요.`);
+                appendLog(`❌ 모델 목록 조회 오류: ${err.message}`, 'error');
+            } finally {
+                refreshModelsBtn.disabled = false;
+                refreshModelsBtn.textContent = '🔄 모델 목록 새로고침';
+            }
+        });
+
+        // 3. 예상 시간 계산 함수
+        function calculateEstimatedSeconds(totalPages, concurrency, modelName) {
+            const perPageRenderOverhead = 0.4; // PDF.js 캔버스 렌더링 & JPEG 압축 오버헤드
+            const playwrightFixedSec = 4.0;    // 최종 문서 렌더링/조합 여유시간
+            const modelBaseSec = MODEL_BASE_SEC[modelName] || MODEL_BASE_SEC['default'];
+            const batchCount = Math.ceil(totalPages / concurrency);
+            return Math.ceil((batchCount * modelBaseSec) + (totalPages * perPageRenderOverhead) + playwrightFixedSec);
+        }
+
+        function updateEstimatedTimeDisplay() {
+            if (!currentTotalPages || currentTotalPages <= 0) return;
+            const selectedModel = modelSelect.value;
+            const selectedConcurrency = parseInt(concurrencySelect.value, 10) || 4;
+            const estSec = calculateEstimatedSeconds(currentTotalPages, selectedConcurrency, selectedModel);
+            estTimeLabel.textContent = `병렬 예상 시간 (${selectedConcurrency}배속)`;
+            estTimeDisplay.textContent = formatDuration(estSec);
+        }
+
+        function formatDuration(sec) {
+            if (sec <= 0) return '완료';
+            if (sec < 60) return `약 ${sec}초`;
+            const min = Math.floor(sec / 60);
+            const rem = sec % 60;
+            return rem > 0 ? `약 ${min}분 ${rem}초` : `약 ${min}분`;
+        }
+
+        function appendLog(msg, type = 'normal') {
+            const now = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            const cls = type === 'success' ? 'log-success' : (type === 'error' ? 'log-error' : (type === 'warn' ? 'log-warn' : ''));
+            div.innerHTML = `<span class="log-time">[${now}]</span><span class="${cls}">${msg}</span>`;
+            logTerminal.appendChild(div);
+            logTerminal.scrollTop = logTerminal.scrollHeight;
+        }
+
+        function stripOuterMarkdownFence(text) {
+            if (!text) return '';
+            text = text.trim();
+            const pattern = /^```(?:markdown|md)?\s*\n([\s\S]*?)\n```$/;
+            const match = text.match(pattern);
+            if (match) return match[1].trim();
+            return text;
+        }
+
+        // 4. 파일 드롭 & PDF.js 파싱
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) handleSelectedFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleSelectedFile(e.target.files[0]);
+        });
+
+        async function handleSelectedFile(file) {
+            if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+                alert('PDF 파일만 업로드할 수 있습니다.');
+                return;
+            }
+
+            currentFile = file;
+            dropZone.style.pointerEvents = 'none';
+            dropZone.style.opacity = '0.5';
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                currentPdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                currentTotalPages = currentPdfDoc.numPages;
+                extractedPages = new Array(currentTotalPages).fill(null);
+
+                const fileSizeMb = (file.size / (1024 * 1024)).toFixed(2);
+                fileNameDisplay.textContent = `${file.name} (${currentTotalPages}페이지 / ${fileSizeMb} MB)`;
+                fileSizeDisplay.textContent = `${fileSizeMb} MB`;
+                pageCountDisplay.textContent = `${currentTotalPages} 페이지`;
+
+                updateEstimatedTimeDisplay();
+
+                dropZone.style.display = 'none';
+                analysisPanel.style.display = 'block';
+                startBtn.disabled = false;
+                startBtn.textContent = '병렬 변환 시작';
+                resetBtn.disabled = false;
+                resultPanel.style.display = 'none';
+            } catch (err) {
+                alert(`PDF 분석 실패: ${err.message}`);
+                resetUI();
+            }
+        }
+
+        function resetUI() {
+            currentFile = null;
+            currentPdfDoc = null;
+            currentTotalPages = 0;
+            extractedPages = [];
+            isProcessing = false;
+            abortRequested = false;
+
+            fileInput.value = '';
+            dropZone.style.display = 'block';
+            dropZone.style.pointerEvents = 'auto';
+            dropZone.style.opacity = '1';
+            analysisPanel.style.display = 'none';
+            progressSection.style.display = 'none';
+            resultPanel.style.display = 'none';
+            renderedPreview.innerHTML = '';
+            renderedPreview.style.display = 'none';
+            logTerminal.innerHTML = '';
+            progressBar.style.width = '0%';
+            percentText.textContent = '0%';
+        }
+
+        resetBtn.addEventListener('click', resetUI);
+
+        // 5. PDF 페이지를 JPEG 180 DPI (Scale 2.5)로 캔버스에 렌더링하고 Base64 추출
+        async function renderPageToBase64Jpeg(pdfDoc, pageNum) {
+            const page = await pdfDoc.getPage(pageNum);
+            // 72 DPI 기준 2.5배율 = 180 DPI 고화질 OCR 최적화
+            const viewport = page.getViewport({ scale: 2.5 });
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+
+            // 투명 배경 방지용 흰색 채우기
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+            // JPEG 85% 고품질 압축
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            return dataUrl.split(',')[1];
+        }
+
+        // 6. OpenAI 규격 Vision REST API 단일 페이지 호출
+        async function callVisionOcrApi(base64Jpeg, pageNum, modelName, apiKey, baseUrl, maxRetries = 3) {
+            const systemPrompt = `당신은 문서 구조 복원 및 OCR 전문가입니다.
+제공된 스캔 문서 이미지를 분석하여 완벽한 구조의 Markdown 텍스트로 변환하세요.
+
+[변환 규칙]
+1. 본문 텍스트: 오탈자 없이 원본의 문단 구조, 제목 계층(#, ##, ###), 리스트를 정확히 보존하세요.
+2. 표(Table): 이미지 내의 모든 표는 표준 Markdown Table 문법으로 정확히 변환하세요.
+3. 다이어그램/순서도/차트: 이미지 내에 플로우차트, 아키텍처 다이어그램, 마인드맵 등이 있다면 반드시 \`\`\`mermaid 코드 블록을 사용하여 Mermaid.js 문법으로 시각화하세요.
+4. 수식: 수식이 포함된 경우 표준 텍스트나 유니코드 기호로 읽기 쉽게 정리하세요.
+5. 출력 형식: 인사말이나 부연 설명, 전체를 감싸는 \`\`\`markdown 코드 펜스 없이 오직 순수 Markdown 본문 내용만 출력하세요.`;
+
+            const payload = {
+                model: modelName,
+                temperature: 0.1,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    {
+                        role: "user",
+                        content: [
+                            { type: "text", text: "이 페이지의 모든 내용을 마크다운으로 정확히 변환하세요." },
+                            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Jpeg}` } }
+                        ]
+                    }
+                ]
+            };
+
+            const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+            let attempt = 0;
+            let delayMs = 2000;
+
+            while (attempt < maxRetries) {
+                attempt++;
+                try {
+                    const res = await fetch(`${cleanBaseUrl}/chat/completions`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiKey}`
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!res.ok) {
+                        const errBody = await res.text();
+                        if (res.status === 429) {
+                            appendLog(`⚠️ [${pageNum}페이지] Rate Limit 감지 (429). ${delayMs / 1000}초 후 재시도 (${attempt}/${maxRetries})...`, 'warn');
+                            await new Promise(r => setTimeout(r, delayMs));
+                            delayMs *= 2;
+                            continue;
+                        }
+                        throw new Error(`HTTP ${res.status}: ${errBody}`);
+                    }
+
+                    const json = await res.json();
+                    if (!json.choices || json.choices.length === 0 || !json.choices[0].message) {
+                        throw new Error("응답 메시지가 비어있습니다: " + JSON.stringify(json));
+                    }
+
+                    const rawText = json.choices[0].message.content || '';
+                    return stripOuterMarkdownFence(rawText);
+                } catch (err) {
+                    if (attempt >= maxRetries) {
+                        throw err;
+                    }
+                    await new Promise(r => setTimeout(r, delayMs));
+                }
+            }
+        }
+
+        // 7. 클라이언트 사이드 병렬 세마포어 작업 실행기
+        async function runParallelWorkerPool(tasks, concurrency, onProgress) {
+            let nextIndex = 0;
+            let activeCount = 0;
+            let completedCount = 0;
+            let errorOccurred = null;
+
+            return new Promise((resolve, reject) => {
+                if (tasks.length === 0) return resolve();
+
+                function launchNext() {
+                    if (errorOccurred) return;
+
+                    while (activeCount < concurrency && nextIndex < tasks.length) {
+                        const idx = nextIndex++;
+                        activeCount++;
+
+                        tasks[idx]()
+                            .then((res) => {
+                                activeCount--;
+                                completedCount++;
+                                if (onProgress) onProgress(completedCount, tasks.length, idx, res, null);
+                                if (completedCount === tasks.length) {
+                                    resolve();
+                                } else {
+                                    launchNext();
+                                }
+                            })
+                            .catch((err) => {
+                                activeCount--;
+                                errorOccurred = err;
+                                if (onProgress) onProgress(completedCount, tasks.length, idx, null, err);
+                                reject(err);
+                            });
+                    }
+                }
+
+                launchNext();
+            });
+        }
+
+        // 8. 변환 시작 버튼 핸들러
+        startBtn.addEventListener('click', async () => {
+            if (!currentPdfDoc || currentTotalPages === 0) return;
+
+            const apiKey = apiKeyInput.value.trim();
+            const baseUrl = baseUrlInput.value.trim();
+            const selectedModel = modelSelect.value;
+            const concurrency = parseInt(concurrencySelect.value, 10) || 4;
+
+            if (!apiKey) {
+                alert('변환을 시작하려면 상단 설정에 API 키를 입력해주세요.');
+                apiKeyInput.focus();
+                return;
+            }
+
+            saveConfig();
+            isProcessing = true;
+            abortRequested = false;
+
+            startBtn.disabled = true;
+            resetBtn.disabled = true;
+            progressSection.style.display = 'block';
+            resultPanel.style.display = 'none';
+
+            appendLog(`🚀 [${providerSelect.options[providerSelect.selectedIndex].text}] 파이프라인 가동: 총 ${currentTotalPages}페이지, ${concurrency}배속 동시 병렬, 모델: ${selectedModel}`);
+
+            const startTime = performance.now();
+            const pageDurations = [];
+            const defaultBaseSec = MODEL_BASE_SEC[selectedModel] || MODEL_BASE_SEC['default'];
+
+            const tasks = Array.from({ length: currentTotalPages }, (_, i) => {
+                const pageNum = i + 1;
+                return async () => {
+                    // 이미 완료된 캐시가 있다면 즉시 반환
+                    if (extractedPages[i]) {
+                        return { pageNum, md: extractedPages[i], cached: true, sec: 0 };
+                    }
+
+                    appendLog(`[${pageNum}/${currentTotalPages} 페이지] 브라우저 Canvas 렌더링(180 DPI) 및 ${selectedModel} 전송...`);
+                    const t0 = performance.now();
+                    const base64Jpeg = await renderPageToBase64Jpeg(currentPdfDoc, pageNum);
+                    const md = await callVisionOcrApi(base64Jpeg, pageNum, selectedModel, apiKey, baseUrl);
+                    const elapsedSec = ((performance.now() - t0) / 1000).toFixed(1);
+
+                    extractedPages[i] = md;
+                    return { pageNum, md, cached: false, sec: parseFloat(elapsedSec) };
+                };
+            });
+
+            try {
+                await runParallelWorkerPool(tasks, concurrency, (completed, total, pageIdx, res, err) => {
+                    if (err) return;
+
+                    if (!res.cached && res.sec > 0) {
+                        pageDurations.push(res.sec);
+                    }
+
+                    const pct = Math.round((completed / total) * 88) + 5;
+                    progressBar.style.width = `${pct}%`;
+                    percentText.textContent = `${pct}%`;
+                    statusText.textContent = `진행 중: ${completed} / ${total} 페이지 완료`;
+
+                    const remainingPages = total - completed;
+                    const avgPageSec = pageDurations.length > 0
+                        ? pageDurations.reduce((a, b) => a + b, 0) / pageDurations.length
+                        : defaultBaseSec;
+                    const etaSec = remainingPages > 0 ? Math.ceil((remainingPages / concurrency) * avgPageSec) + 4 : 2;
+
+                    estTimeLabel.textContent = '실측 남은 시간';
+                    estTimeDisplay.textContent = formatDuration(etaSec);
+
+                    const tag = res.cached ? '(캐시 복원)' : `(${res.sec}초 소요)`;
+                    appendLog(`✔ [${res.pageNum}/${total} 페이지] 완료 ${tag} - ${res.md.length.toLocaleString()}자 추출`, 'success');
+                });
+
+                // 최종 조합 및 Mermaid 렌더링
+                statusText.textContent = '마크다운 구조 조합 및 Mermaid 다이어그램 실시간 렌더링 중...';
+                progressBar.style.width = '95%';
+                percentText.textContent = '95%';
+                appendLog('📄 전체 페이지 Markdown 조합 및 브라우저 엔진 벡터 렌더링 중...');
+
+                const combinedMd = extractedPages.join("\n\n<hr class='page-divider'>\n\n");
+                await renderMarkdownToPreview(combinedMd);
+
+                const totalElapsedSec = ((performance.now() - startTime) / 1000).toFixed(1);
+                const totalChars = extractedPages.reduce((acc, cur) => acc + (cur ? cur.length : 0), 0);
+
+                progressBar.style.width = '100%';
+                percentText.textContent = '100%';
+                statusText.textContent = `변환 완료 (총 ${totalElapsedSec}초 소요 / ${totalChars.toLocaleString()}자)`;
+                estTimeLabel.textContent = '소요 시간';
+                estTimeDisplay.textContent = `${totalElapsedSec}초`;
+
+                appendLog(`🎉 모든 페이지 변환 완료! (총 ${totalElapsedSec}초 소요 / ${totalChars.toLocaleString()}자 추출)`, 'success');
+
+                resultPanel.style.display = 'block';
+                resultSummaryText.textContent = `총 ${currentTotalPages}페이지 변환 성공 (소요: ${totalElapsedSec}초 / 문자: ${totalChars.toLocaleString()}자). 아래 버튼으로 저장하세요.`;
+                resetBtn.disabled = false;
+                resetBtn.textContent = '새 파일 변환';
+            } catch (error) {
+                appendLog(`❌ 변환 중단 오류: ${error.message}`, 'error');
+                statusText.textContent = '오류로 인해 변환이 일시 중단되었습니다.';
+                startBtn.disabled = false;
+                startBtn.textContent = '중단 지점부터 이어하기';
+                resetBtn.disabled = false;
+                alert(`변환 중 오류가 발생했습니다:\n${error.message}\n\n[중단 지점부터 이어하기]를 누르면 완료된 페이지는 건너뛰고 계속 진행합니다.`);
+            } finally {
+                isProcessing = false;
+            }
+        });
+
+        // 9. Markdown & Mermaid 브라우저 렌더링
+        async function renderMarkdownToPreview(rawMarkdown) {
+            renderedPreview.style.display = 'block';
+            mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+
+            const renderer = new marked.Renderer();
+            const defaultCodeRenderer = renderer.code.bind(renderer);
+
+            renderer.code = function(code, infostring, escaped) {
+                let codeText = typeof code === 'object' ? code.text : code;
+                let lang = typeof code === 'object' ? code.lang : infostring;
+                if (lang === 'mermaid') {
+                    return `<div class="mermaid">${codeText}</div>`;
+                }
+                return defaultCodeRenderer(code, infostring, escaped);
+            };
+
+            marked.setOptions({ renderer: renderer, gfm: true, breaks: true });
+            renderedPreview.innerHTML = marked.parse(rawMarkdown);
+
+            const mermaidNodes = renderedPreview.querySelectorAll('.mermaid');
+            if (mermaidNodes.length > 0) {
+                try {
+                    await mermaid.run({ nodes: mermaidNodes });
+                } catch (e) {
+                    console.warn("Mermaid 렌더링 경고:", e);
+                }
+            }
+        }
+
+        // 10. 내보내기 버튼 핸들러들
+        function getBaseFileName() {
+            if (!currentFile) return 'document';
+            return currentFile.name.replace(/\.[^/.]+$/, '');
+        }
+
+        // 10-1. html2pdf.js 이용한 순수 클라이언트 PDF 다운로드
+        downloadPdfBtn.addEventListener('click', () => {
+            const opt = {
+                margin: [15, 15, 15, 15],
+                filename: `${getBaseFileName()}_vectorized.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+            downloadPdfBtn.disabled = true;
+            downloadPdfBtn.textContent = 'PDF 생성 중...';
+            html2pdf().set(opt).from(renderedPreview).save().then(() => {
+                downloadPdfBtn.disabled = false;
+                downloadPdfBtn.innerHTML = `
+                    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9.75v6.75m0 0l-3-3m3 3l3-3m-8.25 6h16.5A2.25 2.25 0 0022.5 17.25V6.75A2.25 2.25 0 0020.25 4.5H3.75A2.25 2.25 0 001.5 6.75v10.5A2.25 2.25 0 003.75 19.5z"/></svg>
+                    벡터 PDF 다운로드
+                `;
+            });
+        });
+
+        // 10-2. 브라우저 내장 인쇄 기능 (최고 품질 벡터 PDF 저장)
+        printDocBtn.addEventListener('click', () => {
+            window.print();
+        });
+
+        // 10-3. 마크다운(.md) 텍스트 파일 다운로드
+        downloadMdBtn.addEventListener('click', () => {
+            const combinedMd = extractedPages.join("\n\n---\n\n");
+            const blob = new Blob([combinedMd], { type: 'text/markdown;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${getBaseFileName()}_vectorized.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // 10-4. 완결형 HTML 다운로드
+        downloadHtmlBtn.addEventListener('click', () => {
+            const fullHtml = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>${getBaseFileName()} - Vectorized Document</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"><\/script>
+    <style>
+        @page { size: A4; margin: 18mm 15mm; }
+        body {
+            font-family: 'Noto Sans CJK KR', 'Malgun Gothic', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 10.5pt;
+            line-height: 1.65;
+            color: #111827;
+            max-width: 800px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        h1, h2, h3 { color: #0f172a; margin-top: 1.4em; margin-bottom: 0.6em; }
+        h1 { font-size: 18pt; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 6px; }
+        h2 { font-size: 14pt; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+        table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 9.5pt; }
+        th, td { border: 1px solid #94a3b8; padding: 7px 10px; text-align: left; }
+        th { background-color: #f1f5f9; font-weight: 700; }
+        pre { background: #f1f5f9; padding: 10px; border-radius: 6px; overflow-x: auto; }
+        blockquote { border-left: 4px solid #64748b; margin: 10px 0; padding: 4px 12px; background: #f8fafc; }
+        .mermaid { display: flex; justify-content: center; margin: 18px 0; }
+        .page-divider { page-break-before: always; height: 0; margin: 20px 0; border: none; }
+    </style>
+</head>
+<body>
+    ${renderedPreview.innerHTML}
+    <script>mermaid.initialize({ startOnLoad: true });<\/script>
+</body>
+</html>`;
+            const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${getBaseFileName()}_vectorized.html`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // 초기 설정 로드
+        window.addEventListener('DOMContentLoaded', () => {
+            loadSavedConfig();
+        });
+    </script>
+</body>
+</html>
