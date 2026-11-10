@@ -806,6 +806,9 @@ async function convert(resume){
   $('resultCard').classList.add('hidden');
   $('pTotal').textContent = totalPages;
   $('log').textContent = '';
+  const meta = getModelMeta(model);
+  let sIn = 0, sOut = 0, sCredit = 0;
+  let done = totalPages - pending.length;
   const isGoogle = activeProvider === 'google';
   if (isGoogle) {
     updateGeminiWaveState('busy', done / totalPages);
@@ -813,9 +816,6 @@ async function convert(resume){
   } else {
     $('pMeter').textContent = '실시간 누적 차감: 0.0 크레딧 (총 0 토큰 사용)';
   }
-  const meta = getModelMeta(model);
-  let sIn = 0, sOut = 0, sCredit = 0;
-  let done = totalPages - pending.length;
   const t0 = performance.now(), startDone = done, failed = [];
   const upd = () => {
     $('pDone').textContent = done;
