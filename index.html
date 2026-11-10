@@ -43,6 +43,16 @@
   .custom-tooltip{position:absolute;bottom:calc(100% + 8px);right:0;width:280px;background:#181b22;border:1px solid var(--line);color:var(--txt);padding:9px 12px;border-radius:8px;font-size:12px;line-height:1.45;box-shadow:0 8px 24px rgba(0,0,0,.6);z-index:999;pointer-events:none}
   .custom-tooltip::after{content:"";position:absolute;top:100%;right:16px;border-width:6px;border-style:solid;border-color:#181b22 transparent transparent transparent}
   .badge.clickable{cursor:help}
+  .gemini-wave-card{position:relative;overflow:hidden;background:radial-gradient(120% 120% at 50% 0%,#151a2e 0%,#0a0d16 100%);border:1px solid rgba(138,180,248,.35);box-shadow:inset 0 0 16px rgba(66,133,244,.15),0 2px 8px rgba(0,0,0,.4);padding:0!important;min-height:58px;display:flex}
+  .gemini-wave-card canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+  .gemini-wave-content{position:relative;z-index:2;padding:8px 10px;display:flex;flex-direction:column;justify-content:space-between;width:100%;height:100%;box-sizing:border-box;background:linear-gradient(180deg,rgba(11,14,23,.2) 0%,rgba(11,14,23,.65) 100%)}
+  .gemini-wave-header{display:flex;align-items:center;justify-content:space-between}
+  .gemini-wave-header label{color:#8ab4f8;font-weight:600;font-size:11px;letter-spacing:.3px;display:inline-flex;align-items:center;gap:5px;margin:0}
+  .gemini-pulse-dot{width:6px;height:6px;border-radius:50%;background:#4285f4;box-shadow:0 0 8px #4285f4;display:inline-block;animation:geminiPulse 2s infinite ease-in-out}
+  @keyframes geminiPulse{0%,100%{opacity:.5;transform:scale(.9);background:#4285f4;box-shadow:0 0 6px #4285f4}50%{opacity:1;transform:scale(1.25);background:#c58af9;box-shadow:0 0 10px #c58af9}}
+  .gemini-wave-main{display:flex;align-items:baseline;justify-content:space-between;gap:6px}
+  .gemini-wave-title{font-size:14px;font-weight:700;background:linear-gradient(135deg,#8ab4f8 0%,#c58af9 50%,#f48fb1 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap;letter-spacing:-.2px}
+  .gemini-wave-status{font-size:11px;color:#9aa0a6;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -85,7 +95,20 @@
       <div class="box"><label>파일 용량</label><b id="iSize"></b></div>
       <div class="box"><label>총 페이지(장) 수</label><b id="iPages"></b></div>
       <div class="box"><label>예상 소요 시간</label><b id="iEta"></b></div>
-      <div class="box"><label>예상 차감 크레딧</label><b id="iCost"></b><span id="costNote" class="hint"></span></div>
+      <div id="costBox" class="box"><label>예상 차감 크레딧</label><b id="iCost"></b><span id="costNote" class="hint"></span></div>
+      <div id="geminiWaveBox" class="box gemini-wave-card hidden">
+        <canvas id="geminiWaveCanvas"></canvas>
+        <div class="gemini-wave-content">
+          <div class="gemini-wave-header">
+            <label><span class="gemini-pulse-dot"></span>Google AI Studio</label>
+            <span id="geminiWavePct" class="gemini-wave-status">대기 중</span>
+          </div>
+          <div class="gemini-wave-main">
+            <span class="gemini-wave-title">Gemini Neural Wave</span>
+            <span id="geminiWaveState" class="gemini-wave-status">대기</span>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="hint" id="formulaNote" style="margin-top:4px"></div>
     <div id="costWarn" class="warnBanner hidden"></div>
@@ -238,13 +261,17 @@ function updateModelBadgeAndTooltip(model) {
   const ttCost = $('ttCost');
   if (ttDesc) ttDesc.textContent = meta.tooltip;
   if (ttCost) {
-    const estPerPage = Math.round((0.65 * meta.creditPer1kInput + 1.1 * meta.creditPer1kOutput) * 10) / 10;
-    ttCost.textContent = `⚡ 페이지당 약 ${estPerPage} 크레딧 차감 (1k토큰당 입: ${meta.creditPer1kInput} / 출: ${meta.creditPer1kOutput})`;
+    if (activeProvider === 'google') {
+      ttCost.textContent = `⚡ 초당 약 ${meta.secPerPage}초/p 고속 처리 · 토큰 기반 변환`;
+    } else {
+      const estPerPage = Math.round((0.65 * meta.creditPer1kInput + 1.1 * meta.creditPer1kOutput) * 10) / 10;
+      ttCost.textContent = `⚡ 페이지당 약 ${estPerPage} 크레딧 차감 (1k토큰당 입: ${meta.creditPer1kInput} / 출: ${meta.creditPer1kOutput})`;
+    }
   }
 
   const warn = $('costWarn');
   if (warn) {
-    if (meta.warn) {
+    if (meta.warn && activeProvider !== 'google') {
       warn.textContent = meta.warnText;
       warn.classList.remove('hidden');
     } else {
@@ -385,6 +412,166 @@ const PROVIDERS = {
 };
 let activeBaseUrl = '', activeProvider = '', detectSeq = 0;
 
+/* ---------- Gemini 오로라 웨이브 애니메이션 ---------- */
+let geminiAnimId = null;
+let geminiIntensity = 0.12;       // 0.12 (idle/done) ~ 1.0 (busy max)
+let geminiTargetIntensity = 0.12;
+let geminiPhase = 0;
+
+function updateGeminiWaveState(mode, progress = 0) {
+  const pctEl = $('geminiWavePct');
+  const stateEl = $('geminiWaveState');
+  const titleEl = document.querySelector('.gemini-wave-title');
+  if (mode === 'busy') {
+    const p = Math.min(Math.max(progress, 0), 1);
+    geminiTargetIntensity = 0.35 + 0.65 * p;
+    if (pctEl) pctEl.textContent = `${Math.round(p * 100)}% 완료`;
+    if (stateEl) stateEl.textContent = '실시간 신경망 가속';
+    if (titleEl) titleEl.textContent = 'Gemini Active Stream';
+  } else if (mode === 'done') {
+    geminiTargetIntensity = 0.12;
+    if (pctEl) pctEl.textContent = '100% 완료';
+    if (stateEl) stateEl.textContent = '변환 완료';
+    if (titleEl) titleEl.textContent = 'Gemini Neural Wave';
+  } else { // idle / stop
+    geminiTargetIntensity = 0.12;
+    if (pctEl) pctEl.textContent = totalPages ? `${totalPages}p 대기 중` : '대기 중';
+    if (stateEl) stateEl.textContent = '대기';
+    if (titleEl) titleEl.textContent = 'Gemini Neural Wave';
+  }
+}
+
+function startGeminiWave() {
+  if (geminiAnimId) return;
+  const canvas = $('geminiWaveCanvas');
+  if (!canvas) return;
+
+  function render() {
+    geminiAnimId = requestAnimationFrame(render);
+    if (!canvas.offsetParent) return;
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const rect = canvas.getBoundingClientRect();
+    const w = Math.round(rect.width);
+    const h = Math.round(rect.height);
+    if (w <= 0 || h <= 0) return;
+
+    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+    }
+
+    const ctx = canvas.getContext('2d');
+    ctx.resetTransform();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    geminiIntensity += (geminiTargetIntensity - geminiIntensity) * 0.05;
+    const speed = 0.015 + geminiIntensity * 0.035;
+    geminiPhase += speed;
+
+    const cy = h * 0.62;
+    const layers = [
+      {
+        c1: 'rgba(66, 133, 244, 0.40)', // Gemini Blue
+        c2: 'rgba(155, 114, 207, 0.28)', // Purple
+        freq: 0.015,
+        mul: 1.0,
+        amp: 4 + geminiIntensity * 20,
+        offset: 0
+      },
+      {
+        c1: 'rgba(155, 114, 207, 0.35)', // Purple / Violet
+        c2: 'rgba(244, 143, 177, 0.28)', // Coral Pink
+        freq: 0.022,
+        mul: 1.3,
+        amp: 3 + geminiIntensity * 16,
+        offset: 2.1
+      },
+      {
+        c1: 'rgba(0, 229, 255, 0.25)',  // Cyan Accent
+        c2: 'rgba(66, 133, 244, 0.35)', // Electric Blue
+        freq: 0.028,
+        mul: 0.8,
+        amp: 3 + geminiIntensity * 13,
+        offset: 4.2
+      }
+    ];
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+
+    // 1. 유체 오로라 웨이브 레이어
+    layers.forEach(layer => {
+      ctx.beginPath();
+      ctx.moveTo(0, h);
+      for (let x = 0; x <= w; x += 4) {
+        const p1 = geminiPhase * layer.mul + layer.offset;
+        const s1 = Math.sin(x * layer.freq + p1);
+        const s2 = Math.sin(x * (layer.freq * 1.7) - p1 * 0.6);
+        const y = cy + (s1 * 0.72 + s2 * 0.28) * layer.amp;
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(w, h);
+      ctx.closePath();
+
+      const grad = ctx.createLinearGradient(0, cy - layer.amp, w, cy + layer.amp);
+      grad.addColorStop(0, layer.c1);
+      grad.addColorStop(1, layer.c2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+    });
+
+    // 2. 상단 네온 광선 빔 (한 줄기의 날카롭고 유려한 빛 스트림)
+    ctx.beginPath();
+    for (let x = 0; x <= w; x += 3) {
+      const p = geminiPhase * 1.15;
+      const y = cy + Math.sin(x * 0.018 + p) * (3 + geminiIntensity * 14)
+                    + Math.cos(x * 0.032 - p * 0.75) * (2 + geminiIntensity * 7);
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    const lineGrad = ctx.createLinearGradient(0, 0, w, 0);
+    lineGrad.addColorStop(0, 'rgba(66, 133, 244, 0.15)');
+    lineGrad.addColorStop(0.25, 'rgba(0, 229, 255, 0.75)');
+    lineGrad.addColorStop(0.65, 'rgba(155, 114, 207, 0.85)');
+    lineGrad.addColorStop(0.9, 'rgba(244, 143, 177, 0.8)');
+    lineGrad.addColorStop(1, 'rgba(66, 133, 244, 0.2)');
+    ctx.strokeStyle = lineGrad;
+    ctx.lineWidth = 1.2 + geminiIntensity * 1.8;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  geminiAnimId = requestAnimationFrame(render);
+}
+
+function stopGeminiWave() {
+  if (geminiAnimId) {
+    cancelAnimationFrame(geminiAnimId);
+    geminiAnimId = null;
+  }
+}
+
+function updateProviderCardUi() {
+  const isGoogle = activeProvider === 'google';
+  const costBox = $('costBox');
+  const waveBox = $('geminiWaveBox');
+  if (costBox && waveBox) {
+    if (isGoogle) {
+      costBox.classList.add('hidden');
+      waveBox.classList.remove('hidden');
+      startGeminiWave();
+      if (!running) updateGeminiWaveState('idle');
+    } else {
+      waveBox.classList.add('hidden');
+      costBox.classList.remove('hidden');
+      stopGeminiWave();
+    }
+  }
+}
+
 function setBadge(text, cls){ const b=$('apiStatusBadge'); b.textContent = text; b.className = 'badge '+cls; }
 function msg(t, err){ const m=$('modelMsg'); m.textContent=t; m.classList.toggle('err', !!err); }
 function setModels(models, lock){
@@ -427,7 +614,14 @@ async function probeModel(base, key){
 async function autoDetectAndLoadModels(apiKey){
   const key = (apiKey||'').trim(), seq = ++detectSeq;
   activeBaseUrl = ''; activeProvider = '';
-  if (!key){ setBadge('● 키 입력 대기','idle'); setModels([DEFAULT_MODEL], true); $('modelSelect').innerHTML='<option value="">(키 입력 후 자동 로드)</option>'; msg(''); return; }
+  if (!key){
+    setBadge('● 키 입력 대기','idle');
+    setModels([DEFAULT_MODEL], true);
+    $('modelSelect').innerHTML='<option value="">(키 입력 후 자동 로드)</option>';
+    msg('');
+    updateProviderCardUi();
+    return;
+  }
   setBadge('● 감지 중…','busy'); msg('');
   const order = key.startsWith('AIza') ? ['google','factchat'] : ['factchat','google'];
 
@@ -438,6 +632,7 @@ async function autoDetectAndLoadModels(apiKey){
       const ids = await fetchModelIds(p.url, key);
       if (seq !== detectSeq) return;
       activeBaseUrl = p.url; activeProvider = id;
+      updateProviderCardUi();
       if (ids.length === 1){               // 모델 전용 키: 필터 예외, 자동 고정
         setModels([ids[0]], true);
         setBadge(`● ${p.name} 연결됨 (단일 모델 자동 고정)`, 'ok');
@@ -463,6 +658,7 @@ async function autoDetectAndLoadModels(apiKey){
     if (seq !== detectSeq) return;
     if (m){
       activeBaseUrl = p.url; activeProvider = id;
+      updateProviderCardUi();
       setModels([m], true);
       setBadge(`● ${p.name} 연결됨 (단일 모델 자동 고정)`, 'ok');
       msg('/models 조회 권한 없음 → 1토큰 테스트로 모델 고정'); return;
@@ -470,6 +666,8 @@ async function autoDetectAndLoadModels(apiKey){
   }
   if (seq !== detectSeq) return;
   setBadge('● 연결 실패','err');
+  activeProvider = '';
+  updateProviderCardUi();
   msg('키가 유효하지 않거나 네트워크/CORS 문제로 두 엔드포인트 모두 연결하지 못했습니다.', true);
   $('modelSelect').innerHTML = '<option value="">(연결 실패)</option>'; $('modelSelect').disabled = true;
 }
@@ -500,6 +698,7 @@ function hideTooltip(){ $('modelTooltip')?.classList.add('hidden'); }
 function init(){
   $('concurrencySelect').value = state.conc;
   $('apiKeyInput').value = state.key;
+  updateProviderCardUi();
   autoDetectAndLoadModels(state.key);
 }
 
@@ -508,16 +707,21 @@ let pdfDoc = null, pdfFile = null, imageFiles = [], inputMode = 'pdf', totalPage
 const fmt = s => { s = Math.max(0, Math.round(s)); const m = Math.floor(s/60); return m ? `${m}분 ${s%60}초` : `${s}초`; };
 const estimate = (pages, conc, model) => Math.ceil(pages/conc)*SEC_PER_PAGE(model) + pages*0.3 + 3;
 function updateEta(){
+  updateProviderCardUi();
   if (!totalPages) return;
   const conc = +$('concurrencySelect').value, model = currentModel();
   const meta = getModelMeta(model);
   $('iEta').textContent = '약 ' + fmt(estimate(totalPages, conc, model));
   $('formulaNote').textContent = `⌈${totalPages}/${conc}⌉ × ${meta.secPerPage}초 + ${totalPages}×0.3 + 3초`;
   
-  const est = estimateCredit(totalPages, model);
-  $('iCost').textContent = `약 ${est.cost.toFixed(1)} 크레딧`;
-  const perPageEst = Math.round((0.65 * meta.creditPer1kInput + 1.1 * meta.creditPer1kOutput) * 10) / 10;
-  $('costNote').textContent = `${meta.badge} · 페이지당 약 ${perPageEst} 크레딧`;
+  if (activeProvider !== 'google') {
+    const est = estimateCredit(totalPages, model);
+    $('iCost').textContent = `약 ${est.cost.toFixed(1)} 크레딧`;
+    const perPageEst = Math.round((0.65 * meta.creditPer1kInput + 1.1 * meta.creditPer1kOutput) * 10) / 10;
+    $('costNote').textContent = `${meta.badge} · 페이지당 약 ${perPageEst} 크레딧`;
+  } else {
+    if (!running) updateGeminiWaveState('idle');
+  }
 
   updateModelBadgeAndTooltip(model);
 }
@@ -785,7 +989,13 @@ async function convert(resume){
   $('resultCard').classList.add('hidden');
   $('pTotal').textContent = totalPages;
   $('log').textContent = '';
-  $('pMeter').textContent = '실시간 누적 차감: 0.0 크레딧 (총 0 토큰 사용)';
+  const isGoogle = activeProvider === 'google';
+  if (isGoogle) {
+    updateGeminiWaveState('busy', done / totalPages);
+    $('pMeter').textContent = `실시간 처리: ${done} / ${totalPages} 페이지 (총 0 토큰 사용)`;
+  } else {
+    $('pMeter').textContent = '실시간 누적 차감: 0.0 크레딧 (총 0 토큰 사용)';
+  }
   const meta = getModelMeta(model);
   let sIn = 0, sOut = 0, sCredit = 0;
   let done = totalPages - pending.length;
@@ -811,8 +1021,14 @@ async function convert(resume){
         const pageCredit = (usage.input / 1000) * meta.creditPer1kInput + (usage.output / 1000) * meta.creditPer1kOutput;
         sIn += usage.input; sOut += usage.output; sCredit += pageCredit;
         const totalTokens = sIn + sOut;
-        $('pMeter').textContent = `실시간 누적 차감: ${sCredit.toFixed(1)} 크레딧 (총 ${fmtInt(totalTokens)} 토큰 사용)`;
-        log(`✓ p.${n} · 입력 ${fmtInt(usage.input)} + 출력 ${fmtInt(usage.output)} 토큰${usage.estimated?'(추정)':''} · 차감: ${pageCredit.toFixed(1)} 크레딧 | 누적: ${sCredit.toFixed(1)} 크레딧 (총 ${fmtInt(totalTokens)} 토큰)`);
+        if (isGoogle) {
+          updateGeminiWaveState('busy', done / totalPages);
+          $('pMeter').textContent = `실시간 처리: ${done} / ${totalPages} 페이지 (총 ${fmtInt(totalTokens)} 토큰 사용)`;
+          log(`✓ p.${n} · 입력 ${fmtInt(usage.input)} + 출력 ${fmtInt(usage.output)} 토큰${usage.estimated?'(추정)':''} · 누적: 총 ${fmtInt(totalTokens)} 토큰`);
+        } else {
+          $('pMeter').textContent = `실시간 누적 차감: ${sCredit.toFixed(1)} 크레딧 (총 ${fmtInt(totalTokens)} 토큰 사용)`;
+          log(`✓ p.${n} · 입력 ${fmtInt(usage.input)} + 출력 ${fmtInt(usage.output)} 토큰${usage.estimated?'(추정)':''} · 차감: ${pageCredit.toFixed(1)} 크레딧 | 누적: ${sCredit.toFixed(1)} 크레딧 (총 ${fmtInt(totalTokens)} 토큰)`);
+        }
       } catch(e){
         if (aborted) return;
         failed.push(n); log(`✗ p.${n} 실패: ${e.message}`);
@@ -826,8 +1042,13 @@ async function convert(resume){
     const cnt = Object.keys(cache).length;
     $('resumeBtn').classList.toggle('hidden', cnt>=totalPages);
     $('resumeBtn').textContent = `이어하기 (${cnt}/${totalPages} 완료)`;
-    if (aborted){ log('⏸ 중단됨 – [이어하기]로 계속할 수 있습니다.'); return; }
+    if (aborted){
+      if (isGoogle) updateGeminiWaveState('idle', 0);
+      log('⏸ 중단됨 – [이어하기]로 계속할 수 있습니다.');
+      return;
+    }
     if (cnt < totalPages){ log(`⚠ ${failed.length}페이지 실패 – [이어하기]로 재시도하세요.`); return; }
+    if (isGoogle) updateGeminiWaveState('done', 1.0);
     log('모든 페이지 완료 → 벡터 PDF 생성 중…');
     await buildAndPrint(cache);
   } finally {
@@ -843,6 +1064,9 @@ $('stopBtn').onclick = () => {
   aborted = true;
   if (abortCtrl) {
     try { abortCtrl.abort(); } catch(e){}
+  }
+  if (activeProvider === 'google') {
+    updateGeminiWaveState('idle', 0);
   }
   log('🛑 [중단] 모든 재시도 대기와 네트워크 통신을 즉시 중단했습니다.');
 };

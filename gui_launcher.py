@@ -52,12 +52,15 @@ def open_web_browser(url: str = "http://localhost:8000"):
 
 
 def check_port_8000() -> bool:
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(0.2)
-            return s.connect_ex(("127.0.0.1", 8000)) == 0
-    except Exception:
-        return False
+    for target_host in ("127.0.0.1", "localhost"):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(0.35)
+                if s.connect_ex((target_host, 8000)) == 0:
+                    return True
+        except Exception:
+            pass
+    return False
 
 
 def kill_port_8000():
@@ -136,7 +139,7 @@ def save_api_key_to_file(key: str):
         threading.Thread(target=_post_key, daemon=True).start()
 
 
-def get_log_tail(lines: int = 12) -> str:
+def get_log_tail(lines: int = 15) -> str:
     log_path = BASE_DIR / "server.log"
     if not log_path.exists():
         return "server.log 파일이 아직 생성되지 않았습니다."
@@ -149,32 +152,23 @@ def get_log_tail(lines: int = 12) -> str:
 
 
 def build_server_command(key: str):
-    escaped_key = key.replace("'", "'\\''")
-    uvicorn_bin = BASE_DIR / "venv" / "bin" / "uvicorn"
-    venv_python = BASE_DIR / "venv" / "bin" / "python"
     win_python = BASE_DIR / "venv" / "Scripts" / "python.exe"
 
     if sys.platform == "win32":
+        # 1. Windows 네이티브 가상환경이 존재하는 경우
         if win_python.exists():
             return [str(win_python), "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown", "1"]
 
-        if (uvicorn_bin.exists() or venv_python.exists()) and shutil.which("wsl"):
-            bash_script = (
-                f"export GEMINI_API_KEY='{escaped_key}'; "
-                f"[ -f venv/bin/activate ] && source venv/bin/activate; "
-                f"exec python -m uvicorn app:app --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 1"
-            )
-            return ["wsl", "bash", "-c", bash_script]
+        # 2. WSL 환경 실행: --cd 로 작업 디렉토리를 프로젝트 폴더로 정확히 지정
+        if shutil.which("wsl"):
+            return ["wsl", "--cd", str(BASE_DIR), "bash", "run_server.sh", key]
 
+        # 3. 폴백: 시스템 파이썬
         return [sys.executable, "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--timeout-graceful-shutdown", "1"]
 
     else:
-        bash_script = (
-            f"export GEMINI_API_KEY='{escaped_key}'; "
-            f"[ -f venv/bin/activate ] && source venv/bin/activate; "
-            f"exec python -m uvicorn app:app --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 1"
-        )
-        return ["bash", "-c", bash_script]
+        # Linux 또는 WSL 네이티브 환경
+        return ["bash", "run_server.sh", key]
 
 
 class DarkLauncherApp:
@@ -196,7 +190,7 @@ class DarkLauncherApp:
         container = tk.Frame(self.root, bg="#111827", padx=16, pady=12)
         container.pack(fill=tk.BOTH, expand=True)
 
-        # 1. 상단 서버 상태 표시 라벨 프레임
+        # 1. 상단 실시간 서버 상태 인디케이터
         self.status_frame = tk.Frame(container, bg="#1F2937", bd=0, padx=10, pady=8)
         self.status_frame.pack(fill=tk.X, pady=(0, 10))
 
@@ -242,7 +236,7 @@ class DarkLauncherApp:
         if initial_key:
             self.key_entry.insert(0, initial_key)
 
-        save_btn = tk.Button(
+        self.save_btn = tk.Button(
             key_input_frame,
             text="키 저장",
             bg="#374151",
@@ -255,9 +249,9 @@ class DarkLauncherApp:
             padx=10,
             command=self.on_save_key
         )
-        save_btn.pack(side=tk.RIGHT, ipady=3)
+        self.save_btn.pack(side=tk.RIGHT, ipady=3)
 
-        # 3. 하단 분리된 3개 버튼
+        # 3. 하단 3개 버튼
         btn_section = tk.Frame(container, bg="#111827")
         btn_section.pack(fill=tk.X)
 
@@ -285,7 +279,7 @@ class DarkLauncherApp:
             sub_btn_frame,
             text="🌐 브라우저 열기",
             bg="#1F2937",
-            fg="#D1D5DB",
+            fg="#9CA3AF",
             activebackground="#374151",
             activeforeground="#FFFFFF",
             relief="flat",
@@ -320,24 +314,36 @@ class DarkLauncherApp:
             self.key_entry.focus_set()
             return
         save_api_key_to_file(key)
-        messagebox.showinfo("저장 완료", "API 키가 .env_key 파일에 저장되었습니다.")
+        self.save_btn.config(text="저장됨 ✔", bg="#059669")
+        self.root.after(1500, lambda: self.save_btn.config(text="키 저장", bg="#374151"))
 
     def update_port_status(self):
-        if not self.is_starting:
-            is_running = check_port_8000()
-            if is_running:
-                self.status_label.config(
-                    text="● 서버 실행 중 (Port: 8000)",
-                    fg="#10B981"
-                )
-                self.browser_btn.config(
-                    bg="#059669",
-                    fg="#FFFFFF"
-                )
-            else:
+        is_running = check_port_8000()
+        if is_running:
+            self.is_starting = False
+            self.status_label.config(
+                text="● 서버 실행 중 (Port: 8000)",
+                fg="#10B981"
+            )
+            self.start_btn.config(
+                state=tk.NORMAL,
+                text="▶ 서버 재시작",
+                bg="#2563EB"
+            )
+            self.browser_btn.config(
+                bg="#059669",
+                fg="#FFFFFF"
+            )
+        else:
+            if not self.is_starting:
                 self.status_label.config(
                     text="○ 서버 정지됨",
                     fg="#EF4444"
+                )
+                self.start_btn.config(
+                    state=tk.NORMAL,
+                    text="▶ 서버 시작",
+                    bg="#2563EB"
                 )
                 self.browser_btn.config(
                     bg="#1F2937",
@@ -362,11 +368,9 @@ class DarkLauncherApp:
 
         save_api_key_to_file(key)
 
+        # 이미 8000번 포트가 열려 있다면 즉시 인디케이터만 반영
         if check_port_8000():
-            messagebox.showinfo(
-                "서버 실행 중",
-                "서버가 이미 실행 중입니다 (Port: 8000).\n\n[🌐 브라우저 열기] 버튼을 누르면 웹 앱이 열립니다."
-            )
+            self.update_port_status()
             return
 
         self.is_starting = True
@@ -381,6 +385,11 @@ class DarkLauncherApp:
         env["GEMINI_API_KEY"] = key
 
         try:
+            # 새 세션 시작 마커 기록
+            with open(BASE_DIR / "server.log", "a", encoding="utf-8") as f:
+                f.write(f"\n===== [SERVER START AT {time.strftime('%Y-%m-%d %H:%M:%S')}] =====\n")
+                f.flush()
+
             log_file = open(BASE_DIR / "server.log", "a", encoding="utf-8")
             if sys.platform == "win32":
                 server_process = subprocess.Popen(
@@ -409,35 +418,37 @@ class DarkLauncherApp:
         threading.Thread(target=self.wait_for_server_ready, daemon=True).start()
 
     def wait_for_server_ready(self):
-        for _ in range(12):
+        # 0.5초 간격으로 최대 24회 (12초) 동안 실제 포트 8000 오픈 여부만 확인
+        for _ in range(24):
             time.sleep(0.5)
             if check_port_8000():
                 self.root.after(0, self.on_start_success)
                 return
-            if server_process is not None and server_process.poll() is not None:
-                break
 
         self.root.after(0, self.on_start_failed)
 
     def on_start_success(self):
+        # 성공 시 사용자 방해 Alert 없이 실시간 인디케이터만 깔끔하게 전환
         self.is_starting = False
-        self.start_btn.config(state=tk.NORMAL, text="▶ 서버 재시작", bg="#2563EB")
         self.status_label.config(text="● 서버 실행 중 (Port: 8000)", fg="#10B981")
+        self.start_btn.config(state=tk.NORMAL, text="▶ 서버 재시작", bg="#2563EB")
         self.browser_btn.config(bg="#059669", fg="#FFFFFF")
-        messagebox.showinfo(
-            "서버 시작 완료",
-            "FastAPI 서버가 성공적으로 시작되었습니다! (Port: 8000)\n\n[🌐 브라우저 열기] 버튼을 눌러 웹 앱을 이용하세요."
-        )
 
     def on_start_failed(self):
+        # 최종 확인: 만약 포트가 열려 있다면 성공으로 처리
+        if check_port_8000():
+            self.on_start_success()
+            return
+
         self.is_starting = False
-        self.start_btn.config(state=tk.NORMAL, text="▶ 서버 시작", bg="#2563EB")
         self.status_label.config(text="○ 서버 시작 실패", fg="#EF4444")
+        self.start_btn.config(state=tk.NORMAL, text="▶ 서버 시작", bg="#2563EB")
         self.browser_btn.config(bg="#1F2937", fg="#9CA3AF")
+
         log_tail = get_log_tail(12)
         messagebox.showerror(
             "서버 구동 실패",
-            f"서버가 정상적으로 구동되지 못했습니다.\n\n[최근 서버 로그 요약]\n{log_tail}\n\nAPI 키 유효성 또는 가상환경/패키지 설치 상태를 확인해주세요."
+            f"서버 포트(8000)가 열리지 않았습니다.\n\n[최근 서버 로그 요약]\n{log_tail}\n\nWSL 가상환경 또는 패키지 상태를 확인해주세요."
         )
 
     def on_open_browser(self):
@@ -451,8 +462,6 @@ class DarkLauncherApp:
 
     def on_stop_server(self):
         global server_process
-        is_running = check_port_8000() or (server_process is not None)
-
         if server_process is not None:
             try:
                 server_process.kill()
@@ -463,15 +472,11 @@ class DarkLauncherApp:
         kill_port_8000()
         time.sleep(0.3)
 
+        # 종료 시에도 불필요한 Alert 팝업 없이 인디케이터만 반영
         self.is_starting = False
         self.status_label.config(text="○ 서버 정지됨", fg="#EF4444")
         self.start_btn.config(state=tk.NORMAL, text="▶ 서버 시작", bg="#2563EB")
         self.browser_btn.config(bg="#1F2937", fg="#9CA3AF")
-
-        if is_running:
-            messagebox.showinfo("종료 완료", "서버가 정상적으로 종료되었습니다.")
-        else:
-            messagebox.showinfo("안내", "실행 중인 서버가 없거나 이미 포트가 해제되었습니다.")
 
     def on_closing(self):
         global server_process

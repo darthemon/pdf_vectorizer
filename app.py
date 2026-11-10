@@ -68,7 +68,14 @@ def strip_outer_markdown_fence(text: str) -> str:
 
 
 def render_page_to_jpeg_bytes(pdf_path: Path, page_idx: int, dpi: int = 180) -> bytes:
-    """PyMuPDF로 페이지를 렌더링하고 네트워크 전송 속도를 극대화하기 위해 JPEG 바이트로 즉시 압축"""
+    """PyMuPDF로 페이지를 렌더링하거나 이미지 파일을 읽어 네트워크 전송 속도를 극대화하기 위해 JPEG 바이트로 즉시 압축"""
+    if pdf_path.suffix.lower() != ".pdf":
+        with Image.open(pdf_path) as img:
+            img = img.convert("RGB")
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=85, optimize=True)
+            return buf.getvalue()
+
     with fitz.open(pdf_path) as doc:
         page = doc.load_page(page_idx)
         pix = page.get_pixmap(dpi=dpi, alpha=False)
@@ -222,36 +229,50 @@ async def get_available_models():
         return {"models": [], "error": str(e)}
 
 
+ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+
+
 @app.post("/api/analyze")
 async def analyze_pdf(file: UploadFile = File(...)):
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="PDF 파일만 업로드 가능합니다.")
+    ext = Path(file.filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="PDF 또는 이미지 파일(PNG, JPG, WEBP 등)만 업로드 가능합니다.")
 
     job_id = str(uuid.uuid4())
     job_dir = WORKSPACE / job_id
     cache_dir = job_dir / "pages_cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    input_pdf_path = job_dir / "input.pdf"
-    with input_pdf_path.open("wb") as buffer:
+    input_file_path = job_dir / f"input{ext}"
+    with input_file_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    file_size_bytes = input_pdf_path.stat().st_size
+    file_size_bytes = input_file_path.stat().st_size
     file_size_mb = round(file_size_bytes / (1024 * 1024), 2)
 
-    try:
-        doc = fitz.open(input_pdf_path)
-        page_count = len(doc)
-        first_page_rect = doc[0].rect if page_count > 0 else None
-        dimensions = f"{int(first_page_rect.width)} x {int(first_page_rect.height)} pt" if first_page_rect else "N/A"
-        doc.close()
-    except Exception as e:
-        shutil.rmtree(job_dir, ignore_errors=True)
-        raise HTTPException(status_code=400, detail=f"유효하지 않거나 손상된 PDF입니다: {str(e)}")
+    if ext == ".pdf":
+        try:
+            doc = fitz.open(input_file_path)
+            page_count = len(doc)
+            first_page_rect = doc[0].rect if page_count > 0 else None
+            dimensions = f"{int(first_page_rect.width)} x {int(first_page_rect.height)} pt" if first_page_rect else "N/A"
+            doc.close()
+        except Exception as e:
+            shutil.rmtree(job_dir, ignore_errors=True)
+            raise HTTPException(status_code=400, detail=f"유효하지 않거나 손상된 PDF입니다: {str(e)}")
 
-    if page_count == 0:
-        shutil.rmtree(job_dir, ignore_errors=True)
-        raise HTTPException(status_code=400, detail="페이지가 없는 빈 PDF 파일입니다.")
+        if page_count == 0:
+            shutil.rmtree(job_dir, ignore_errors=True)
+            raise HTTPException(status_code=400, detail="페이지가 없는 빈 PDF 파일입니다.")
+    else:
+        try:
+            with Image.open(input_file_path) as img:
+                w, h = img.size
+            page_count = 1
+            dimensions = f"{w} x {h} px"
+        except Exception as e:
+            shutil.rmtree(job_dir, ignore_errors=True)
+            raise HTTPException(status_code=400, detail=f"유효하지 않거나 손상된 이미지 파일입니다: {str(e)}")
 
     # 병렬 처리를 반영한 현실적인 예상 시간 산출
     estimated_seconds = int((page_count * ESTIMATED_SEC_PER_PAGE) + 4)
@@ -259,9 +280,10 @@ async def analyze_pdf(file: UploadFile = File(...)):
     JOBS[job_id] = {
         "job_id": job_id,
         "original_name": Path(file.filename).stem,
-        "input_path": input_pdf_path,
+        "input_path": input_file_path,
         "cache_dir": cache_dir,
         "output_path": job_dir / "output_vector.pdf",
+        "output_png_path": job_dir / "output_vector.png",
         "page_count": page_count,
         "file_size_mb": file_size_mb,
         "status": "analyzed"
@@ -422,6 +444,11 @@ async def process_pdf_stream(
                     print_background=True,
                     margin={"top": "18mm", "bottom": "18mm", "left": "15mm", "right": "15mm"}
                 )
+                await context_page.screenshot(
+                    path=str(job["output_png_path"]),
+                    full_page=True,
+                    type="png"
+                )
                 await browser.close()
 
             total_elapsed = round(time.time() - start_time, 1)
@@ -432,8 +459,9 @@ async def process_pdf_stream(
                 "status": "completed",
                 "progress": 100,
                 "eta_seconds": 0,
-                "message": f"벡터 PDF 생성 완료! (총 {total_elapsed}초 소요 / 용량: {out_size_kb} KB) 자동 다운로드합니다.",
-                "download_url": f"/api/download/{job_id}"
+                "message": f"벡터 PDF 및 PNG 생성 완료! (총 {total_elapsed}초 소요 / 용량: {out_size_kb} KB) 자동 다운로드합니다.",
+                "download_url": f"/api/download/{job_id}",
+                "download_png_url": f"/api/download/{job_id}?format=png"
             })
 
         except Exception as e:
@@ -448,11 +476,19 @@ async def process_pdf_stream(
 
 
 @app.get("/api/download/{job_id}")
-async def download_result(job_id: str):
+async def download_result(job_id: str, format: str = Query("pdf")):
     if job_id not in JOBS:
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
 
     job = JOBS[job_id]
+    fmt = format.lower()
+    if fmt == "png":
+        output_path = job.get("output_png_path", job["output_path"].with_suffix(".png"))
+        if not output_path.exists():
+            raise HTTPException(status_code=404, detail="생성된 PNG 파일이 존재하지 않습니다.")
+        download_filename = f"{job['original_name']}_vectorized.png"
+        return FileResponse(path=output_path, media_type="image/png", filename=download_filename)
+
     output_path = job["output_path"]
     if not output_path.exists():
         raise HTTPException(status_code=404, detail="생성된 PDF 파일이 존재하지 않습니다.")
