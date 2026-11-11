@@ -9,9 +9,9 @@ const MODEL_TIERS = {
   flash: {
     grade: 1,
     prefix: '[🟢추천]',
-    badge: '🟢 저비용 · 추천',
+    badge: '🟢 저비용 모델 · 추천',
     badgeColor: '#10b981',
-    tooltip: '가성비 최고! 최신 경량 모델로 크레딧 부담 없이 빠르고 정확하게 변환합니다. (가장 권장)',
+    tooltip: '경량 모델입니다. 속도가 빠르고 소모되는 크레딧이 적습니다.',
     creditPer1kInput: 0.4,
     creditPer1kOutput: 1.2,
     secPerPage: 4.2,
@@ -20,9 +20,9 @@ const MODEL_TIERS = {
   standard: {
     grade: 2,
     prefix: '[🔵표준]',
-    badge: '🔵 표준 · 고정밀',
+    badge: '🔵 표준 모델',
     badgeColor: '#3b82f6',
-    tooltip: '성능과 비용의 밸런스가 뛰어난 표준 모델입니다. 복잡한 표와 레이아웃 복원에 적합합니다.',
+    tooltip: '적당한 성능과 비용을 갖춘 밸런스가 뛰어난 모델입니다.',
     creditPer1kInput: 2.0,
     creditPer1kOutput: 6.0,
     secPerPage: 6.0,
@@ -31,39 +31,39 @@ const MODEL_TIERS = {
   high: {
     grade: 3,
     prefix: '[🟠고비용]',
-    badge: '🟠 고비용 주의',
+    badge: '🟠 고비용 모델',
     badgeColor: '#f59e0b',
-    tooltip: '고성능·고비용 모델입니다. 저비용 추천 모델 대비 약 8~10배 많은 크레딧이 차감됩니다.',
+    tooltip: '고비용 모델입니다. 저비용 모델보다 약 8~10배 많은 크레딧이 차감됩니다.',
     creditPer1kInput: 6.0,
     creditPer1kOutput: 18.0,
     secPerPage: 8.5,
     warn: true,
-    warnText: '⚠️ 선택한 모델(고비용 주의)은 저비용 추천 모델 대비 약 8~10배 많은 크레딧이 차감됩니다.'
+    warnText: '⚠️ 고비용 모델 주의! 저비용 모델보다 약 8~10배 많은 크레딧이 차감됩니다.'
   },
   ultra: {
     grade: 4,
     prefix: '[🔴초고비용]',
-    badge: '🔴 초고비용 경고',
+    badge: '🔴 초고비용 모델',
     badgeColor: '#ef4444',
-    tooltip: '최상위 초고비용 모델입니다! 문서 변환 시 크레딧이 막대하게 소모되므로 사용을 권장하지 않습니다.',
+    tooltip: '초고비용 모델입니다. 과도하게 많은 크레딧이 소모될 수 있어 사용을 권장하지 않습니다.',
     creditPer1kInput: 15.0,
     creditPer1kOutput: 45.0,
     secPerPage: 12.0,
     warn: true,
-    warnText: '🚨 선택한 모델(초고비용 경고)은 최상위 초고비용 모델입니다! 문서 변환 시 크레딧이 막대하게 소모되므로 사용을 권장하지 않습니다.'
+    warnText: '🚨 초고비용 모델 주의! 과도하게 많은 크레딧이 소모될 수 있어 사용을 권장하지 않습니다.'
   }
 };
 
 function getModelMeta(modelId) {
   const l = String(modelId || '').toLowerCase();
   // 1. 초고비용 (astra, fable)
-  if (l.includes('astra') || l.includes('fable')) return MODEL_TIERS.ultra;
+  if (l.includes('astra') || l.includes('fable') || l.includes('carbon')) return MODEL_TIERS.ultra;
   // 2. 고비용 (sol, opus, argon)
   if (l.includes('sol') || l.includes('opus') || l.includes('argon')) return MODEL_TIERS.high;
   // 3. 표준 (sonnet, terra, pro, gemma)
-  if (l.includes('sonnet') || l.includes('terra') || l.includes('pro') || l.includes('gemma')) return MODEL_TIERS.standard;
+  if (l.includes('sonnet') || l.includes('terra') || l.includes('pro')) return MODEL_TIERS.standard;
   // 4. 저비용 · 추천 (flash, haiku)
-  if (l.includes('flash') || l.includes('haiku')) return MODEL_TIERS.flash;
+  if (l.includes('flash') || l.includes('haiku') || l.includes('luna') || l.includes('gemma')) return MODEL_TIERS.flash;
   // fallback: 표준 모델
   return MODEL_TIERS.standard;
 }
@@ -161,10 +161,10 @@ const EXCLUDE_KEYWORDS = [
 ];
 
 const FOUR_TIER_KEYWORDS = [
-  'flash', 'haiku',
-  'sonnet', 'terra', 'pro', 'gemma',
+  'flash', 'haiku', 'luna', 'gemma',
+  'sonnet', 'terra', 'pro',
   'sol', 'opus', 'argon',
-  'astra', 'fable'
+  'astra', 'fable', 'carbon'
 ];
 
 function isExcludedModel(id) {
