@@ -35,6 +35,22 @@
       </select></div>
   </div>
   <div id="modelMsg" class="hint" style="margin-top:6px"></div>
+  <div class="row opt-row" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--line);align-items:center">
+    <div class="f sm"><label for="optPgNum">📑 쪽 번호 기록</label>
+      <select id="optPgNum">
+        <option value="off">기록 안 함 (기본)</option>
+        <option value="orig">원본 쪽 번호 (없으면 순번)</option>
+        <option value="seq">순번 (1, 2, 3…)</option>
+      </select>
+    </div>
+    <div class="f sm check-group">
+      <label><input type="checkbox" id="optPgHeader"> 머리글(상단 문구) 포함</label>
+      <label><input type="checkbox" id="optPgFooter"> 바닥글(하단 문구) 포함</label>
+    </div>
+    <div class="hint" style="flex:1;min-width:220px;line-height:1.4">
+      ※ 선택하지 않은 서식은 본문에서 깔끔히 제외되며, 변환 후에도 언제든 옵션을 변경하면 즉시 다시 생성됩니다.
+    </div>
+  </div>
 </section>
 
 <section class="card">
@@ -107,6 +123,6 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="app.js"></script>
+<script src="app.js?v=20261111"></script>
 </body>
 </html>

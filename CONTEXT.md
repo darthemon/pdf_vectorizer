@@ -32,7 +32,7 @@ pdf-vectorizer/
 - 사용자는 `python gui_launcher.py` 없이 `index.html`을 브라우저로 열거나 GitHub Pages로 접속하면 됩니다. (`file://`에서 CDN/워커가 막히면 `python -m http.server`)
 
 ### 각 파일의 역할
-1. **`index.html`**: UI 마크업(API 키 입력 `#apiKeyInput`, 상태 배지 `#apiStatusBadge`, 모델 드롭다운 `#modelSelect`, 병렬 배수 `#concurrencySelect`, 드롭존, 4칸 정보 박스, 진행 카드, 결과/내보내기 카드). CDN 로드: PDF.js 3.11.174, Marked, Mermaid 10, KaTeX 0.16, html2canvas, jsPDF, JSZip.
+1. **`index.html`**: UI 마크업(API 키 입력 `#apiKeyInput`, 상태 배지 `#apiStatusBadge`, 모델 드롭다운 `#modelSelect`, 병렬 배수 `#concurrencySelect`, 쪽 번호 및 머리글/바닥글 옵션 `#optPgNum`/`#optPgHeader`/`#optPgFooter`, 드롭존, 4칸 정보 박스, 진행 카드, 결과/내보내기 카드). CDN 로드: PDF.js 3.11.174, Marked, Mermaid 10, KaTeX 0.16, html2canvas, jsPDF, JSZip.
 2. **`style.css`**: 컬러 변수(`:root`), `.grid4`/`.box`, `.gemini-wave-card`, `.badge`, `.custom-tooltip`.
 3. **`app.js`**: 아래 2절 표 참고.
 
@@ -53,7 +53,7 @@ pdf-vectorizer/
 | **API 통신 & 즉각 중단** | `callApi(dataUrl, cfg)`, `sleep(ms, signal)`, `abortCtrl` | 429/5xx 지수 백오프, AbortController 즉시 중단, `usage` 실측(없으면 글자 수 역산) |
 | **절전 방지** | `startKeepAlive()`, `stopKeepAlive()` | Wake Lock + 무음 Web Audio 루프 |
 | **변환 파이프라인** | `convert(resume)`, `worker()` | 병렬 워커 풀, 진행률/ETA/누적 토큰·크레딧 |
-| **페이지 서식(쪽 번호·머리글/바닥글)** | `splitPageMeta(md)`, `stripFurniture(body, meta, rep)`, `preparePages(cache)`, `pageDeco(info, idx, seqNo)`, `drawDeco(...)`, `decorateCanvas(cv, d)`, `injectPageOptionUi()`, `rebuildFromCache()` | 응답 끝의 `<!--PAGE {...}-->` 분리, 본문에 섞인 머리글/바닥글/쪽 번호 제거(+여러 쪽 반복 줄 감지), 사용자 옵션(`state.pgNum/pgHeader/pgFooter`)에 따라 PDF/PNG/HTML/MD에 기록 |
+| **페이지 서식(쪽 번호·머리글/바닥글)** | `splitPageMeta(md)`, `stripFurniture(body, meta, rep)`, `preparePages(cache)`, `pageDeco(info, idx, seqNo)`, `drawDeco(...)`, `decorateCanvas(cv, d)`, `initPageOptions()`, `rebuildFromCache()` | 응답 끝의 `<!--PAGE {...}-->` 분리, 본문에 섞인 머리글/바닥글/쪽 번호 제거(+여러 쪽 반복 줄 감지), 사용자 옵션(`state.pgNum/pgHeader/pgFooter`)에 따라 PDF/PNG/HTML/MD에 기록 |
 | **Markdown → HTML** | `mdToHtml(md)`, `renderPagesHtml(bodies)`, `fitWideMath(root)` | 수식 보호(`@@MATH n@@`) → marked(`breaks:true`) → KaTeX 치환, Mermaid→SVG, 본문보다 넓은 블록 수식은 글자 축소 |
 | **A4 분할 & 결과 생성** | `buildAndPrint(cache)`, `computePageCuts(stage, Hpx)`, `makeOutputsFromPages(pagesHtml, infos)` | 페이지 경계 계산, 5종 포맷 Blob 생성 (이름은 레거시, **인쇄 창은 띄우지 않음**). PDF는 A4 캔버스에 본문 조각+머리글/바닥글을 합성 |
 | **다운로드** | `download(kind, ext)`, `updateExportFormatUI()` | PDF / PNG / PNG-ZIP / HTML / MD |
@@ -177,7 +177,7 @@ pdf-vectorizer/
 6. 분할: 고정 높이 슬라이스(표/글줄 잘림) → **`computePageCuts`** 로 표·제목·그림 보호.
 7. OCR: 서식(제목/굵게)과 수식(LaTeX) 보존 강화 — 프롬프트 개편 + 수식 보호 파이프라인.
 8. 코드 3파일 분리(`9390a68`), `convert()`의 `done` TDZ 오류 수정(`eb2288a`).
-9. (2026-11-10) 머리글/쪽 번호가 본문 중간에 섞이거나 배치·표·수식이 깨지는 문제 대응: 쪽 번호/머리글/바닥글을 본문과 분리(`PAGE` 메타 줄 + 후처리)하고 사용자 옵션으로 기록, 프롬프트에 줄바꿈·정렬·열 나열 표·여러 줄 수식 규칙 추가. 기존 "쪽 번호 생략" 규칙은 "옵션에 따라 기록"으로 대체. 옵션 UI는 `index.html`을 건드리지 않고 `injectPageOptionUi()`가 `#analysisPanel`에 주입.
+9. (2026-11-10) 머리글/쪽 번호가 본문 중간에 섞이거나 배치·표·수식이 깨지는 문제 대응: 쪽 번호/머리글/바닥글을 본문과 분리(`PAGE` 메타 줄 + 후처리)하고 사용자 옵션으로 기록, 프롬프트에 줄바꿈·정렬·열 나열 표·여러 줄 수식 규칙 추가. 기존 "쪽 번호 생략" 규칙은 "옵션에 따라 기록"으로 대체. 옵션 UI는 `index.html` 상단 설정 카드에 `#optPgNum`, `#optPgHeader`, `#optPgFooter`로 정식 마크업되어 페이지 접속 즉시 설정 가능.
 
 ---
 

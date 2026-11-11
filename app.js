@@ -515,6 +515,7 @@ function hideTooltip(){ $('modelTooltip')?.classList.add('hidden'); }
 function init(){
   $('concurrencySelect').value = state.conc;
   $('apiKeyInput').value = state.key;
+  initPageOptions();
   updateProviderCardUi();
   autoDetectAndLoadModels(state.key);
 }
@@ -1067,30 +1068,27 @@ function fitWideMath(root){
   });
 }
 
-/* 옵션 UI (index.html 수정 없이 주입) */
-function injectPageOptionUi(){
-  if ($('pgOptBox')) return;
-  const box = document.createElement('div');
-  box.id = 'pgOptBox';
-  box.style.cssText = 'margin:14px 0;padding:12px 14px;border:1px solid rgba(148,163,184,.35);border-radius:10px;font-size:14px;line-height:1.9';
-  box.innerHTML = `<div style="font-weight:700;margin-bottom:4px">📑 페이지 서식 기록 옵션</div>
-    <label>쪽 번호&nbsp;
-      <select id="optPgNum"><option value="off">기록 안 함</option><option value="orig">원본 쪽 번호 (없으면 순번)</option><option value="seq">출력 페이지 순번</option></select>
-    </label><br>
-    <label><input type="checkbox" id="optPgHeader"> 머리글(반복 상단 문구) 기록</label>&emsp;
-    <label><input type="checkbox" id="optPgFooter"> 바닥글(반복 하단 문구) 기록</label>
-    <div style="opacity:.65;font-size:12px">변환 후에도 바꾸면 API 호출 없이 결과 파일이 즉시 다시 생성됩니다. 선택하지 않은 서식은 본문에 섞이지 않고 제외됩니다.</div>`;
-  const host = $('analysisPanel') || $('resultCard') || document.body;
-  host.appendChild(box);
-  $('optPgNum').value = state.pgNum;
-  $('optPgHeader').checked = !!state.pgHeader;
-  $('optPgFooter').checked = !!state.pgFooter;
+/* ---------- 페이지 서식 옵션 동기화 및 이벤트 ---------- */
+function initPageOptions(){
+  const selNum = $('optPgNum');
+  const chkHeader = $('optPgHeader');
+  const chkFooter = $('optPgFooter');
+  if (!selNum || !chkHeader || !chkFooter) return;
+
+  selNum.value = state.pgNum || 'off';
+  chkHeader.checked = !!state.pgHeader;
+  chkFooter.checked = !!state.pgFooter;
+
   let t;
   const onChange = () => {
-    state.pgNum = $('optPgNum').value; state.pgHeader = $('optPgHeader').checked; state.pgFooter = $('optPgFooter').checked; save();
-    clearTimeout(t); t = setTimeout(rebuildFromCache, 300);
+    state.pgNum = selNum.value;
+    state.pgHeader = chkHeader.checked;
+    state.pgFooter = chkFooter.checked;
+    save();
+    clearTimeout(t);
+    t = setTimeout(rebuildFromCache, 300);
   };
-  ['optPgNum','optPgHeader','optPgFooter'].forEach(id => $(id).addEventListener('change', onChange));
+  [selNum, chkHeader, chkFooter].forEach(el => el.addEventListener('change', onChange));
 }
 let building = false, rebuildQueued = false;
 async function rebuildFromCache(){
@@ -1399,5 +1397,4 @@ $('dlPng').onclick  = () => {
 };
 $('dlMd').onclick   = () => { $('exportFormat').value = 'md'; updateExportFormatUI(); download('md','md'); };
 $('dlHtml').onclick = () => { $('exportFormat').value = 'html'; updateExportFormatUI(); download('html','html'); };
-injectPageOptionUi();
 init();
