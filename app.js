@@ -1211,28 +1211,28 @@ function startGeminiBgFlow(){
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
 
-      // 3개의 유체 오로라 리본 밴드
+      // 3개의 유체 오로라 리본 밴드 (부드럽고 우아한 톤온톤)
       const bands = [
         {
-          grad: ['rgba(26, 115, 232, 0.65)', 'rgba(124, 77, 255, 0.45)', 'rgba(0, 229, 255, 0.2)'],
-          freq: 0.004,
-          amp: 36 + geminiIntensity * 40,
+          grad: ['rgba(26, 115, 232, 0.55)', 'rgba(124, 77, 255, 0.40)', 'rgba(138, 180, 248, 0.15)'],
+          freq: 0.0035,
+          amp: 36 + geminiIntensity * 35,
           baseX: 55,
+          speedMul: 0.8
+        },
+        {
+          grad: ['rgba(124, 77, 255, 0.50)', 'rgba(157, 104, 255, 0.40)', 'rgba(26, 115, 232, 0.15)'],
+          freq: 0.005,
+          amp: 28 + geminiIntensity * 28,
+          baseX: 85,
           speedMul: 1.0
         },
         {
-          grad: ['rgba(124, 77, 255, 0.60)', 'rgba(250, 85, 96, 0.50)', 'rgba(26, 115, 232, 0.2)'],
-          freq: 0.006,
-          amp: 28 + geminiIntensity * 32,
-          baseX: 85,
-          speedMul: 1.3
-        },
-        {
-          grad: ['rgba(0, 229, 255, 0.45)', 'rgba(66, 133, 244, 0.55)', 'rgba(250, 85, 96, 0.2)'],
-          freq: 0.008,
-          amp: 20 + geminiIntensity * 25,
+          grad: ['rgba(138, 180, 248, 0.40)', 'rgba(66, 133, 244, 0.45)', 'rgba(124, 77, 255, 0.15)'],
+          freq: 0.007,
+          amp: 20 + geminiIntensity * 22,
           baseX: 115,
-          speedMul: 0.8
+          speedMul: 0.7
         }
       ];
 
@@ -1258,22 +1258,22 @@ function startGeminiBgFlow(){
         ctx.filter = 'none';
       });
 
-      // 가장자리 샤프한 오로라 라이트 엣지 빔
+      // 가장자리 샤프한 오로라 라이트 엣지 빔 (부드러운 아이스 블루 & 바이올렛)
       ctx.beginPath();
       for (let y = 0; y <= H; y += 8){
-        const p = phase * 1.2;
-        const x = 70 + Math.sin(y * 0.005 + p) * (30 + geminiIntensity * 28);
+        const p = phase * 0.9;
+        const x = 70 + Math.sin(y * 0.004 + p) * (26 + geminiIntensity * 24);
         if (y === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
       const edgeGrad = ctx.createLinearGradient(0, 0, 0, H);
-      edgeGrad.addColorStop(0, 'rgba(0, 229, 255, 0.8)');
-      edgeGrad.addColorStop(0.5, 'rgba(124, 77, 255, 0.9)');
-      edgeGrad.addColorStop(1, 'rgba(250, 85, 96, 0.75)');
+      edgeGrad.addColorStop(0, 'rgba(138, 180, 248, 0.7)');
+      edgeGrad.addColorStop(0.5, 'rgba(124, 77, 255, 0.75)');
+      edgeGrad.addColorStop(1, 'rgba(100, 210, 255, 0.6)');
       ctx.strokeStyle = edgeGrad;
-      ctx.lineWidth = 1.8 + geminiIntensity * 2.0;
-      ctx.shadowColor = '#00e5ff';
-      ctx.shadowBlur = 12;
+      ctx.lineWidth = 1.6 + geminiIntensity * 1.5;
+      ctx.shadowColor = 'rgba(138, 180, 248, 0.6)';
+      ctx.shadowBlur = 10;
       ctx.stroke();
 
       ctx.restore();
