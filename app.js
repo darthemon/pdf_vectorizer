@@ -288,6 +288,84 @@ function startGeminiWave() {
     geminiPhase += speed;
 
     const cy = h * 0.52;
+
+    if (state.skin === 'cyberpunk') {
+      // ===== 사이버펑크 2077 네온 오실로스코프 파형 모드 =====
+      ctx.save();
+      
+      // 1. 미세 테크니컬 오실로스코프 그리드
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.08)';
+      ctx.lineWidth = 1;
+      const step = 18;
+      for (let gx = 0; gx <= w; gx += step) {
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke();
+      }
+      for (let gy = 0; gy <= h; gy += step) {
+        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
+      }
+      
+      // 2. 중심 오실레이터 기준선
+      ctx.strokeStyle = 'rgba(252, 238, 10, 0.25)';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(w, cy); ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.globalCompositeOperation = 'screen';
+
+      // 3. 네온 핑크 & 시안 하단 디지털 필터 영역
+      ctx.beginPath();
+      ctx.moveTo(0, cy);
+      for (let x = 0; x <= w; x += 4) {
+        const p = geminiPhase * 1.5;
+        const rawSin = Math.sin(x * 0.02 + p);
+        const stepSin = Math.sign(rawSin) * Math.pow(Math.abs(rawSin), 0.6);
+        const y = cy + stepSin * (4 + geminiIntensity * 16);
+        ctx.lineTo(x, y);
+      }
+      ctx.lineTo(w, h);
+      ctx.lineTo(0, h);
+      ctx.closePath();
+      const cpFill = ctx.createLinearGradient(0, cy, 0, h);
+      cpFill.addColorStop(0, 'rgba(255, 0, 85, 0.25)');
+      cpFill.addColorStop(1, 'rgba(0, 240, 255, 0.02)');
+      ctx.fillStyle = cpFill;
+      ctx.fill();
+
+      // 4. 네온 시안 오실로스코프 메인 펄스 (날카로운 디지털 파형)
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += 3) {
+        const p = geminiPhase * 2.0;
+        const q = Math.sin(x * 0.035 + p) * Math.cos(x * 0.015 - p * 0.5);
+        const spike = (x % 48 === 0) ? (Math.sin(p * 3 + x) * 9 * geminiIntensity) : 0;
+        const y = cy + q * (5 + geminiIntensity * 20) + spike;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 1.8 + geminiIntensity * 1.5;
+      ctx.shadowColor = '#00f0ff';
+      ctx.shadowBlur = 12;
+      ctx.stroke();
+
+      // 5. 사이버 옐로우 전자기 스파이크 빔
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += 5) {
+        const p = geminiPhase * 2.8;
+        const saw = ((x * 0.025 + p) % 1) - 0.5;
+        const y = cy + saw * (6 + geminiIntensity * 22);
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = '#fcee0a';
+      ctx.lineWidth = 1.2;
+      ctx.shadowColor = '#fcee0a';
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+
+      ctx.restore();
+      return;
+    }
+
     const layers = [
       {
         c1: 'rgba(66, 133, 244, 0.45)', // Gemini Blue
@@ -1095,13 +1173,136 @@ function initPageOptions(){
 /* ---------- 비주얼 스킨 / 테마 관리 ---------- */
 const VALID_SKINS = ['default', 'cyberpunk', 'gemini'];
 
+/* ---------- Gemini AI Studio 좌우 유체 오로라 플로우 캔버스 애니메이션 ---------- */
+let geminiFlowAnimId = null;
+let geminiFlowPhase = 0;
+
+function startGeminiBgFlow(){
+  if (geminiFlowAnimId) return;
+  const cvLeft = $('geminiFlowCanvasLeft');
+  const cvRight = $('geminiFlowCanvasRight');
+  if (!cvLeft || !cvRight) return;
+
+  function renderFlow(){
+    if (state.skin !== 'gemini'){
+      stopGeminiBgFlow();
+      return;
+    }
+    geminiFlowAnimId = requestAnimationFrame(renderFlow);
+
+    const W = 240;
+    const H = window.innerHeight || 800;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    geminiFlowPhase += 0.008 + geminiIntensity * 0.015;
+
+    [cvLeft, cvRight].forEach((cv, idx) => {
+      if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)){
+        cv.width = Math.round(W * dpr);
+        cv.height = Math.round(H * dpr);
+      }
+      const ctx = cv.getContext('2d');
+      ctx.resetTransform();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, W, H);
+
+      const phase = geminiFlowPhase + (idx === 1 ? 3.14 : 0);
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+
+      // 3개의 유체 오로라 리본 밴드
+      const bands = [
+        {
+          grad: ['rgba(26, 115, 232, 0.65)', 'rgba(124, 77, 255, 0.45)', 'rgba(0, 229, 255, 0.2)'],
+          freq: 0.004,
+          amp: 36 + geminiIntensity * 40,
+          baseX: 55,
+          speedMul: 1.0
+        },
+        {
+          grad: ['rgba(124, 77, 255, 0.60)', 'rgba(250, 85, 96, 0.50)', 'rgba(26, 115, 232, 0.2)'],
+          freq: 0.006,
+          amp: 28 + geminiIntensity * 32,
+          baseX: 85,
+          speedMul: 1.3
+        },
+        {
+          grad: ['rgba(0, 229, 255, 0.45)', 'rgba(66, 133, 244, 0.55)', 'rgba(250, 85, 96, 0.2)'],
+          freq: 0.008,
+          amp: 20 + geminiIntensity * 25,
+          baseX: 115,
+          speedMul: 0.8
+        }
+      ];
+
+      bands.forEach(b => {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        for (let y = 0; y <= H; y += 12){
+          const p = phase * b.speedMul;
+          const x = b.baseX + Math.sin(y * b.freq + p) * b.amp
+                            + Math.cos(y * (b.freq * 2.2) - p * 0.7) * (b.amp * 0.4);
+          ctx.lineTo(x, y);
+        }
+        ctx.lineTo(0, H);
+        ctx.closePath();
+
+        const lg = ctx.createLinearGradient(0, 0, W, H);
+        lg.addColorStop(0, b.grad[0]);
+        lg.addColorStop(0.5, b.grad[1]);
+        lg.addColorStop(1, b.grad[2]);
+        ctx.fillStyle = lg;
+        ctx.filter = 'blur(16px)';
+        ctx.fill();
+        ctx.filter = 'none';
+      });
+
+      // 가장자리 샤프한 오로라 라이트 엣지 빔
+      ctx.beginPath();
+      for (let y = 0; y <= H; y += 8){
+        const p = phase * 1.2;
+        const x = 70 + Math.sin(y * 0.005 + p) * (30 + geminiIntensity * 28);
+        if (y === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      const edgeGrad = ctx.createLinearGradient(0, 0, 0, H);
+      edgeGrad.addColorStop(0, 'rgba(0, 229, 255, 0.8)');
+      edgeGrad.addColorStop(0.5, 'rgba(124, 77, 255, 0.9)');
+      edgeGrad.addColorStop(1, 'rgba(250, 85, 96, 0.75)');
+      ctx.strokeStyle = edgeGrad;
+      ctx.lineWidth = 1.8 + geminiIntensity * 2.0;
+      ctx.shadowColor = '#00e5ff';
+      ctx.shadowBlur = 12;
+      ctx.stroke();
+
+      ctx.restore();
+    });
+  }
+
+  geminiFlowAnimId = requestAnimationFrame(renderFlow);
+}
+
+function stopGeminiBgFlow(){
+  if (geminiFlowAnimId){
+    cancelAnimationFrame(geminiFlowAnimId);
+    geminiFlowAnimId = null;
+  }
+}
+
 function applyTheme(skinName){
   const skin = VALID_SKINS.includes(skinName) ? skinName : 'default';
   state.skin = skin;
   if (skin === 'default') {
     document.documentElement.removeAttribute('data-theme');
+    stopGeminiBgFlow();
   } else {
     document.documentElement.setAttribute('data-theme', skin);
+    if (skin === 'gemini') {
+      startGeminiBgFlow();
+    } else {
+      stopGeminiBgFlow();
+    }
   }
   document.querySelectorAll('.skin-option-card').forEach(card => {
     card.classList.toggle('active', card.dataset.skin === skin);

@@ -7,6 +7,25 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- 테마별 몰입형 배경 비주얼 레이어 -->
+<div id="themeBgLayer" class="theme-bg-layer" aria-hidden="true">
+  <!-- 사이버펑크 전용: 신스웨이브 선셋, 마천루 스카이라인, 스크롤 격자 바닥 -->
+  <div class="cp-bg-wrap">
+    <div class="cp-sun"></div>
+    <div class="cp-skyline"></div>
+    <div class="cp-grid-horizon"></div>
+    <div class="cp-synth-grid"></div>
+    <div class="cp-scanlines"></div>
+  </div>
+  <!-- Gemini AI Studio 전용: 화면 좌우 유체 오로라 플로우 리본 캔버스 -->
+  <div class="gemini-bg-wrap">
+    <canvas id="geminiFlowCanvasLeft" class="gemini-flow-canvas gemini-flow-left"></canvas>
+    <canvas id="geminiFlowCanvasRight" class="gemini-flow-canvas gemini-flow-right"></canvas>
+    <div class="gemini-ambient-orb orb-1"></div>
+    <div class="gemini-ambient-orb orb-2"></div>
+    <div class="gemini-ambient-orb orb-3"></div>
+  </div>
+</div>
 <header>
   <div class="header-inner">
     <div class="header-left">
@@ -202,6 +221,6 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="app.js?v=20261111_skin"></script>
+<script src="app.js?v=20261111_v151"></script>
 </body>
 </html>

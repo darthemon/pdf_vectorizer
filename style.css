@@ -1,13 +1,13 @@
 :root{--bg:#0f1115;--card:#181b22;--line:#2a2f3a;--txt:#e6e9ef;--mut:#8b93a5;--acc:#4f8cff;--ok:#3ecf8e;--warn:#f5a524;--err:#ff5d5d}
 *{box-sizing:border-box}
-body{margin:0;font:14px/1.5 system-ui,"Malgun Gothic",sans-serif;background:var(--bg);color:var(--txt);transition:background-color .35s ease,color .35s ease}
-header{padding:14px 20px;border-bottom:1px solid var(--line);font-weight:700;font-size:16px;background:inherit;transition:border-color .35s ease}
+body{margin:0;font:14px/1.5 system-ui,"Malgun Gothic",sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;position:relative;transition:background-color .35s ease,color .35s ease}
+header{padding:14px 20px;border-bottom:1px solid var(--line);font-weight:700;font-size:16px;background:inherit;position:relative;z-index:10;transition:border-color .35s ease}
 .header-inner{display:flex;justify-content:space-between;align-items:center}
 .header-left{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
 .header-right{display:flex;align-items:center}
 .logo-title{cursor:pointer;user-select:none;transition:opacity .2s,transform .2s}
 .logo-title:hover{opacity:.85;transform:translateY(-0.5px)}
-main{max-width:960px;margin:0 auto;padding:16px;display:grid;gap:14px}
+main{max-width:960px;margin:0 auto;padding:16px;display:grid;gap:14px;position:relative;z-index:5}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;transition:background-color .35s ease,border-color .35s ease,box-shadow .35s ease}
 .row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
 .f{display:flex;flex-direction:column;gap:4px;min-width:150px;flex:1}
@@ -48,13 +48,29 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .check-group label{font-size:13px;color:var(--txt);display:inline-flex;align-items:center;gap:6px;cursor:pointer}
 
 /* ==========================================================================
-   숨겨진 스킨 변경 버튼 & 모달 UI
+   테마별 공통 배경 레이어 인프라
+   ========================================================================== */
+.theme-bg-layer{
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:0;
+  overflow:hidden;
+}
+.cp-bg-wrap, .gemini-bg-wrap{
+  display:none;
+  position:absolute;
+  inset:0;
+}
+
+/* ==========================================================================
+   숨겨진 스킨 버튼 & 모달 UI
    ========================================================================== */
 .skin-secret-btn{
   background:transparent;
   border:1px solid transparent;
   color:var(--mut);
-  padding:4px 9px;
+  padding:5px 10px;
   border-radius:99px;
   cursor:pointer;
   opacity:0.25;
@@ -62,7 +78,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  font-size:14px;
+  font-size:15px;
   line-height:1;
 }
 .skin-secret-btn:hover, .skin-secret-btn:focus-visible{
@@ -70,18 +86,17 @@ button:disabled{opacity:.45;cursor:not-allowed}
   background:rgba(255,255,255,.08);
   border-color:var(--line);
   color:var(--txt);
-  box-shadow:0 0 12px rgba(79,140,255,.4);
-  transform:scale(1.08);
+  box-shadow:0 0 14px rgba(79,140,255,.45);
+  transform:scale(1.1);
 }
 .skin-secret-sparkle{
   display:inline-block;
   transition:transform .4s ease;
 }
 .skin-secret-btn:hover .skin-secret-sparkle{
-  transform:rotate(90deg) scale(1.15);
+  transform:rotate(90deg) scale(1.2);
 }
 
-/* 스킨 모달 */
 .skin-modal{
   position:fixed;
   inset:0;
@@ -94,19 +109,19 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .skin-modal-backdrop{
   position:absolute;
   inset:0;
-  background:rgba(0,0,0,.68);
-  backdrop-filter:blur(8px);
-  -webkit-backdrop-filter:blur(8px);
+  background:rgba(0,0,0,.72);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
 }
 .skin-modal-dialog{
   position:relative;
   width:100%;
-  max-width:520px;
+  max-width:540px;
   background:var(--card);
   border:1px solid var(--line);
   border-radius:14px;
-  box-shadow:0 24px 60px rgba(0,0,0,.65),0 0 1px rgba(255,255,255,.12);
-  padding:20px 22px;
+  box-shadow:0 24px 60px rgba(0,0,0,.7),0 0 1px rgba(255,255,255,.15);
+  padding:22px 24px;
   z-index:1;
   animation:skinModalPop .22s cubic-bezier(0.16,1,0.3,1);
 }
@@ -121,7 +136,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
   margin-bottom:8px;
 }
 .skin-modal-title{
-  font-size:16px;
+  font-size:16.5px;
   font-weight:700;
   display:flex;
   align-items:center;
@@ -130,13 +145,13 @@ button:disabled{opacity:.45;cursor:not-allowed}
 }
 .sparkle-icon{
   color:var(--acc);
-  font-size:15px;
+  font-size:16px;
 }
 .skin-modal-close{
   background:transparent;
   border:none;
   color:var(--mut);
-  font-size:16px;
+  font-size:17px;
   cursor:pointer;
   padding:4px 8px;
   border-radius:6px;
@@ -155,14 +170,14 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .skin-options{
   display:flex;
   flex-direction:column;
-  gap:10px;
+  gap:11px;
 }
 .skin-option-card{
   display:flex;
   align-items:center;
   gap:14px;
   padding:12px 14px;
-  background:rgba(0,0,0,.22);
+  background:rgba(0,0,0,.25);
   border:1.5px solid var(--line);
   border-radius:10px;
   cursor:pointer;
@@ -176,12 +191,12 @@ button:disabled{opacity:.45;cursor:not-allowed}
 }
 .skin-option-card.active{
   border-color:var(--acc);
-  background:rgba(79,140,255,.09);
+  background:rgba(79,140,255,.1);
   box-shadow:0 0 0 1px var(--acc);
 }
 .skin-preview{
-  width:52px;
-  height:38px;
+  width:54px;
+  height:40px;
   border-radius:6px;
   padding:6px;
   display:flex;
@@ -191,355 +206,492 @@ button:disabled{opacity:.45;cursor:not-allowed}
   flex-shrink:0;
   border:1px solid rgba(255,255,255,.1);
 }
-.skin-preview .pv-bar{
-  height:4px;
-  border-radius:2px;
-}
-.skin-preview .pv-box{
-  height:14px;
-  border-radius:3px;
-}
-/* 프리뷰 박스 */
+.skin-preview .pv-bar{height:4px;border-radius:2px}
+.skin-preview .pv-box{height:15px;border-radius:3px}
 .preview-default{background:#13161c}
 .preview-default .pv-bar{background:#4f8cff;width:60%}
 .preview-default .pv-box{background:#1f242e;border:1px solid #2a2f3a}
-
 .preview-cyberpunk{
-  background:#080812;
-  border-color:rgba(0,240,255,.4);
-  box-shadow:inset 0 0 8px rgba(255,0,127,.25);
+  background:#090610;
+  border-color:#fcee0a;
+  box-shadow:inset 0 0 8px rgba(255,0,85,.3);
 }
 .preview-cyberpunk .pv-bar{
-  background:linear-gradient(90deg,#ff007f,#00f0ff);
+  background:linear-gradient(90deg,#ff0055,#fcee0a);
   width:75%;
-  box-shadow:0 0 6px #00f0ff;
+  box-shadow:0 0 6px #fcee0a;
 }
 .preview-cyberpunk .pv-box{
-  background:rgba(14,16,28,.9);
+  background:#0d0818;
   border:1px solid #00f0ff;
 }
-
 .preview-gemini{
-  background:#090d16;
-  border-color:rgba(124,77,255,.4);
-  box-shadow:inset 0 0 8px rgba(66,133,244,.25);
+  background:#070b14;
+  border-color:#7c4dff;
+  box-shadow:inset 0 0 10px rgba(66,133,244,.3);
 }
 .preview-gemini .pv-bar{
-  background:linear-gradient(90deg,#1a73e8,#7c4dff,#ff4081,#00e5ff);
-  width:80%;
+  background:linear-gradient(90deg,#1a73e8,#7c4dff,#fa5560,#00e5ff);
+  width:85%;
 }
 .preview-gemini .pv-box{
   background:rgba(22,29,48,.9);
   border:1px solid rgba(124,77,255,.6);
 }
-
-.skin-meta{
-  flex:1;
-  min-width:0;
-}
-.skin-meta-top{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  margin-bottom:2px;
-}
-.skin-title{
-  font-weight:600;
-  font-size:13.5px;
-  color:var(--txt);
-}
-.skin-tag{
-  font-size:10px;
-  font-weight:700;
-  padding:1px 6px;
-  border-radius:4px;
-  letter-spacing:.5px;
-}
+.skin-meta{flex:1;min-width:0}
+.skin-meta-top{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.skin-title{font-weight:600;font-size:13.5px;color:var(--txt)}
+.skin-tag{font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.5px}
 .skin-tag.classic{background:rgba(139,147,165,.2);color:var(--mut)}
 .skin-tag.neon{
-  background:rgba(255,0,127,.18);
-  color:#ff2a85;
-  border:1px solid rgba(255,0,127,.4);
-  text-shadow:0 0 6px rgba(255,0,127,.4);
+  background:rgba(252,238,10,.18);
+  color:#fcee0a;
+  border:1px solid rgba(252,238,10,.4);
+  text-shadow:0 0 6px rgba(252,238,10,.4);
 }
 .skin-tag.gemini{
-  background:linear-gradient(90deg,rgba(66,133,244,.2),rgba(255,64,129,.2));
+  background:linear-gradient(90deg,rgba(66,133,244,.25),rgba(255,64,129,.25));
   color:#9cbaff;
-  border:1px solid rgba(124,77,255,.4);
+  border:1px solid rgba(124,77,255,.5);
 }
-.skin-subtitle{
-  font-size:11.5px;
-  color:var(--mut);
-}
-.skin-check-badge{
-  font-size:14px;
-  color:var(--ok);
-  font-weight:700;
-  opacity:0;
-  transition:opacity .2s ease;
-}
-.skin-option-card.active .skin-check-badge{
-  opacity:1;
-}
+.skin-subtitle{font-size:11.5px;color:var(--mut)}
+.skin-check-badge{font-size:14px;color:var(--ok);font-weight:700;opacity:0;transition:opacity .2s ease}
+.skin-option-card.active .skin-check-badge{opacity:1}
 
 /* ==========================================================================
-   작업 2.1: 사이버펑크 2077 / 신스웨이브 네온 펑크 스킨 [data-theme="cyberpunk"]
-   - 네온 디자인 룩, 과하지 않으면서 섬세하게 반짝이는 스타일
-   - 나이트 시티 감성의 시안/핫핑크/퍼플 네온 + 은은한 그리드 메쉬
+   작업 1: 사이버펑크 2077 테마 완전 개편 [data-theme="cyberpunk"]
+   - 신스웨이브 격자 바닥 + 나이트 시티 마천루 스카이라인 + 네온 선셋
+   - 챔퍼 코너(각진 45도 커팅) + 사이버 옐로우(#fcee0a) / 시안(#00f0ff) / 마젠타(#ff0055)
+   - 사이버 HUD 브래킷, 테크 라벨, 위험 빗금 패턴, 오실로스코프 웨이브 변신
    ========================================================================== */
 [data-theme="cyberpunk"]{
-  --bg:#07070f;
-  --card:rgba(13,15,26,0.92);
-  --line:rgba(0,240,255,0.24);
+  --bg:#07070e;
+  --card:rgba(11,12,22,0.92);
+  --line:rgba(0,240,255,0.3);
   --txt:#f2f6ff;
-  --mut:#8b9bb4;
-  --acc:#00f0ff;
+  --mut:#8899b0;
+  --acc:#fcee0a;       /* 사이버펑크 2077 시그니처 옐로우 */
+  --neon-cyan:#00f0ff;
+  --neon-pink:#ff0055;
+  --neon-yellow:#fcee0a;
   --ok:#00ff9f;
   --warn:#fcee0a;
   --err:#ff0055;
 }
-[data-theme="cyberpunk"] body{
-  background-color:var(--bg);
-  background-image:
-    linear-gradient(rgba(0,240,255,0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,240,255,0.035) 1px, transparent 1px),
-    radial-gradient(ellipse 90% 50% at 85% 0%, rgba(255,0,127,0.08) 0%, transparent 60%),
-    radial-gradient(ellipse 80% 40% at 15% 100%, rgba(0,240,255,0.07) 0%, transparent 60%);
-  background-size:36px 36px, 36px 36px, 100% 100%, 100% 100%;
-  background-attachment:fixed;
+
+[data-theme="cyberpunk"] .cp-bg-wrap{
+  display:block;
 }
+
+/* 신스웨이브 태양 */
+[data-theme="cyberpunk"] .cp-sun{
+  position:absolute;
+  top:2vh;
+  left:50%;
+  transform:translateX(-50%);
+  width:320px;
+  height:320px;
+  border-radius:50%;
+  background:linear-gradient(180deg,#ff0055 0%,#ff5500 50%,#fcee0a 100%);
+  box-shadow:0 0 60px rgba(255,0,85,0.5),0 0 120px rgba(252,238,10,0.3);
+  opacity:0.65;
+  -webkit-mask-image:linear-gradient(180deg,
+    #000 0%, #000 45%,
+    transparent 45%, transparent 48%,
+    #000 48%, #000 58%,
+    transparent 58%, transparent 62%,
+    #000 62%, #000 72%,
+    transparent 72%, transparent 77%,
+    #000 77%, #000 86%,
+    transparent 86%, transparent 92%,
+    #000 92%, #000 100%
+  );
+  mask-image:linear-gradient(180deg,
+    #000 0%, #000 45%,
+    transparent 45%, transparent 48%,
+    #000 48%, #000 58%,
+    transparent 58%, transparent 62%,
+    #000 62%, #000 72%,
+    transparent 72%, transparent 77%,
+    #000 77%, #000 86%,
+    transparent 86%, transparent 92%,
+    #000 92%, #000 100%
+  );
+}
+
+/* 나이트 시티 마천루 건물 스카이라인 */
+[data-theme="cyberpunk"] .cp-skyline{
+  position:absolute;
+  bottom:35vh;
+  left:0;
+  width:100%;
+  height:180px;
+  background-repeat:repeat-x;
+  background-position:bottom;
+  background-size:600px 180px;
+  opacity:0.55;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 180' preserveAspectRatio='none'%3E%3Cpolygon points='0,180 0,90 20,90 20,110 40,110 40,70 60,70 60,50 70,50 70,20 72,20 72,50 85,50 85,180 110,180 110,40 115,40 115,10 117,10 117,40 135,40 135,180 160,180 160,100 190,100 190,60 215,60 215,180 240,180 240,30 255,30 255,180 280,180 280,85 305,85 305,180 330,180 330,55 340,55 340,15 342,15 342,55 360,55 360,180 390,180 390,95 420,95 420,45 440,45 440,180 470,180 470,75 490,75 490,180 520,180 520,35 525,35 525,5 527,5 527,35 545,35 545,180 575,180 575,80 600,80 600,180' fill='%230b0d19' stroke='%2300f0ff' stroke-width='1.2' stroke-opacity='0.4'/%3E%3Ccircle cx='71' cy='18' r='2' fill='%23ff0055'/%3E%3Ccircle cx='116' cy='8' r='2' fill='%2300f0ff'/%3E%3Ccircle cx='341' cy='13' r='2' fill='%23fcee0a'/%3E%3Ccircle cx='526' cy='4' r='2' fill='%23ff0055'/%3E%3Crect x='115' y='60' width='14' height='4' fill='%23fcee0a' opacity='0.7'/%3E%3Crect x='115' y='72' width='14' height='4' fill='%2300f0ff' opacity='0.7'/%3E%3Crect x='244' y='50' width='8' height='15' fill='%23ff0055' opacity='0.6'/%3E%3Crect x='425' y='65' width='10' height='4' fill='%2300f0ff' opacity='0.8'/%3E%3C/svg%3E");
+}
+
+/* 지평선 네온 발광선 */
+[data-theme="cyberpunk"] .cp-grid-horizon{
+  position:absolute;
+  bottom:35vh;
+  left:0;
+  width:100%;
+  height:3px;
+  background:linear-gradient(90deg,transparent,#00f0ff 25%,#ff0055 50%,#fcee0a 75%,transparent);
+  box-shadow:0 0 20px #00f0ff,0 0 40px #ff0055;
+  z-index:1;
+}
+
+/* 3D 신스웨이브 투시 격자 바닥 */
+[data-theme="cyberpunk"] .cp-synth-grid{
+  position:absolute;
+  bottom:0;
+  left:-50%;
+  width:200%;
+  height:35vh;
+  background-image:
+    linear-gradient(rgba(0,240,255,0.4) 1.5px, transparent 1.5px),
+    linear-gradient(90deg, rgba(255,0,85,0.4) 1.5px, transparent 1.5px);
+  background-size:48px 48px;
+  transform:perspective(320px) rotateX(65deg);
+  transform-origin:top center;
+  animation:synthGridScroll 1.6s linear infinite;
+  mask-image:linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.15) 100%);
+  -webkit-mask-image:linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.15) 100%);
+}
+@keyframes synthGridScroll{
+  0%{background-position:0 0}
+  100%{background-position:0 48px}
+}
+
+/* CRT 스캔라인 & 사이버 노이즈 오버레이 */
+[data-theme="cyberpunk"] .cp-scanlines{
+  position:absolute;
+  inset:0;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,0.2) 0px,rgba(0,0,0,0.2) 1px,transparent 1px,transparent 3px);
+  opacity:0.4;
+  pointer-events:none;
+}
+
 [data-theme="cyberpunk"] header{
-  border-bottom:1px solid rgba(0,240,255,0.3);
-  background:rgba(10,12,20,0.85);
-  backdrop-filter:blur(10px);
-  box-shadow:0 1px 18px rgba(0,240,255,0.12);
+  background:rgba(8,9,16,0.92);
+  border-bottom:2px solid #fcee0a;
+  box-shadow:0 2px 20px rgba(252,238,10,0.25),0 0 8px rgba(0,240,255,0.3);
 }
 [data-theme="cyberpunk"] .logo-title{
-  color:#fff;
-  text-shadow:0 0 8px rgba(0,240,255,0.8),0 0 16px rgba(255,0,127,0.4);
-  letter-spacing:0.5px;
+  color:#fcee0a;
+  font-family:ui-monospace,SFMono-Regular,"Segoe UI",monospace;
+  font-weight:900;
+  letter-spacing:1px;
+  text-shadow:0 0 10px rgba(252,238,10,0.7),2px 2px 0 #ff0055,-2px -2px 0 #00f0ff;
+  position:relative;
 }
+[data-theme="cyberpunk"] .logo-title::after{
+  content:" // NC-2077";
+  font-size:10px;
+  color:#00f0ff;
+  font-weight:700;
+  text-shadow:0 0 6px #00f0ff;
+  margin-left:6px;
+  vertical-align:middle;
+}
+
+/* 사이버펑크 챔퍼 코너 카드 */
 [data-theme="cyberpunk"] .card{
   position:relative;
-  background:var(--card);
-  border:1px solid rgba(0,240,255,0.22);
-  border-radius:8px;
-  box-shadow:
-    0 8px 24px rgba(0,0,0,0.6),
-    0 0 14px rgba(0,240,255,0.08),
-    inset 0 0 16px rgba(255,0,127,0.025);
+  background:rgba(10,12,20,0.92);
+  border:1px solid rgba(0,240,255,0.35);
+  border-left:3px solid #fcee0a;
+  border-radius:0;
+  clip-path:polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
+  box-shadow:0 10px 30px rgba(0,0,0,0.7),0 0 16px rgba(0,240,255,0.12),inset 0 0 20px rgba(255,0,85,0.03);
   backdrop-filter:blur(8px);
 }
 [data-theme="cyberpunk"] .card::before{
-  content:"";
+  content:"// SYSTEM_NET // V.2077";
   position:absolute;
-  top:0;
-  left:0;
-  right:0;
-  height:2px;
-  background:linear-gradient(90deg,#00f0ff 0%,#ff007f 70%,transparent 100%);
-  border-radius:8px 8px 0 0;
-  opacity:0.85;
-  animation:cyberGlitter 4s ease-in-out infinite alternate;
+  top:2px;
+  right:16px;
+  font:9px/1 monospace;
+  color:#fcee0a;
+  letter-spacing:1px;
+  opacity:0.8;
+  z-index:2;
 }
-@keyframes cyberGlitter{
-  0%{opacity:0.6;filter:drop-shadow(0 0 3px #00f0ff)}
-  100%{opacity:1;filter:drop-shadow(0 0 8px #ff007f)}
+
+/* 사이버펑크 2077 시그니처 옐로우 액션 버튼 */
+[data-theme="cyberpunk"] button{
+  background:#fcee0a;
+  color:#07070e;
+  border:none;
+  font-weight:900;
+  letter-spacing:0.8px;
+  border-radius:0;
+  clip-path:polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  box-shadow:0 0 16px rgba(252,238,10,0.5),0 0 30px rgba(255,0,85,0.25);
+  transition:all .18s ease;
 }
+[data-theme="cyberpunk"] button:hover:not(:disabled){
+  background:#fff;
+  color:#ff0055;
+  box-shadow:0 0 24px rgba(252,238,10,0.8),0 0 40px rgba(0,240,255,0.5);
+  transform:scale(1.03) translateY(-1px);
+}
+[data-theme="cyberpunk"] button.sec{
+  background:rgba(12,14,24,0.9);
+  border:1px solid #00f0ff;
+  color:#00f0ff;
+  box-shadow:0 0 8px rgba(0,240,255,0.2);
+}
+[data-theme="cyberpunk"] button.sec:hover:not(:disabled){
+  background:#00f0ff;
+  color:#07070e;
+  box-shadow:0 0 18px rgba(0,240,255,0.7);
+}
+
+/* 사이버펑크 HUD 타겟 스캐너 드롭존 */
+[data-theme="cyberpunk"] #drop{
+  border:2px dashed #00f0ff;
+  background:rgba(6,8,16,0.75);
+  border-radius:0;
+  clip-path:polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+  position:relative;
+  box-shadow:inset 0 0 24px rgba(0,240,255,0.06);
+  font-family:monospace;
+  letter-spacing:0.5px;
+}
+[data-theme="cyberpunk"] #drop::before{
+  content:"[ DATA SCANNER READY ]";
+  display:block;
+  font-size:11px;
+  color:#fcee0a;
+  margin-bottom:6px;
+  letter-spacing:1.5px;
+}
+[data-theme="cyberpunk"] #drop.over{
+  border-color:#ff0055;
+  color:#fff;
+  background:rgba(255,0,85,0.14);
+  box-shadow:inset 0 0 40px rgba(255,0,85,0.35),0 0 25px rgba(252,238,10,0.5);
+}
+
 [data-theme="cyberpunk"] input,
 [data-theme="cyberpunk"] select{
-  background:rgba(8,10,18,0.9);
-  border:1px solid rgba(0,240,255,0.3);
+  background:rgba(7,9,16,0.95);
+  border:1px solid rgba(0,240,255,0.4);
+  border-radius:0;
   color:#f2f6ff;
-  border-radius:6px;
+  font-family:monospace;
 }
 [data-theme="cyberpunk"] input:focus,
 [data-theme="cyberpunk"] select:focus{
   outline:none;
-  border-color:#00f0ff;
-  box-shadow:0 0 10px rgba(0,240,255,0.5),inset 0 0 6px rgba(0,240,255,0.2);
-}
-[data-theme="cyberpunk"] button{
-  background:linear-gradient(135deg,#ff007f 0%,#7928ca 50%,#00f0ff 100%);
-  border:1px solid #00f0ff;
-  color:#fff;
-  font-weight:700;
-  letter-spacing:0.5px;
-  border-radius:6px;
-  box-shadow:0 0 14px rgba(0,240,255,0.35),0 0 24px rgba(255,0,127,0.2);
-  transition:all .22s cubic-bezier(0.4,0,0.2,1);
-}
-[data-theme="cyberpunk"] button:hover:not(:disabled){
-  transform:translateY(-1px);
-  box-shadow:0 0 20px rgba(0,240,255,0.65),0 0 32px rgba(255,0,127,0.4);
-  filter:brightness(1.12);
-}
-[data-theme="cyberpunk"] button.sec{
-  background:rgba(10,12,22,0.85);
-  border:1px solid rgba(0,240,255,0.38);
-  color:#00f0ff;
-  box-shadow:none;
-}
-[data-theme="cyberpunk"] button.sec:hover:not(:disabled){
-  background:rgba(0,240,255,0.14);
-  border-color:#00f0ff;
-  box-shadow:0 0 12px rgba(0,240,255,0.4);
-}
-[data-theme="cyberpunk"] #drop{
-  border:2px dashed rgba(0,240,255,0.35);
-  background:rgba(6,8,16,0.6);
-  border-radius:8px;
-  position:relative;
-  box-shadow:inset 0 0 18px rgba(0,240,255,0.03);
-}
-[data-theme="cyberpunk"] #drop:hover{
-  border-color:#00f0ff;
-  color:#00f0ff;
-  box-shadow:inset 0 0 22px rgba(0,240,255,0.08),0 0 12px rgba(0,240,255,0.2);
-}
-[data-theme="cyberpunk"] #drop.over{
-  border-color:#ff007f;
-  color:#fff;
-  background:rgba(255,0,127,0.08);
-  box-shadow:inset 0 0 30px rgba(255,0,127,0.2),0 0 20px rgba(255,0,127,0.4);
+  border-color:#fcee0a;
+  box-shadow:0 0 12px rgba(252,238,10,0.6);
 }
 [data-theme="cyberpunk"] .box{
-  background:rgba(8,10,18,0.85);
-  border:1px solid rgba(0,240,255,0.2);
-  border-radius:6px;
-  box-shadow:inset 0 0 8px rgba(0,240,255,0.03);
+  background:rgba(8,10,18,0.92);
+  border:1px solid rgba(0,240,255,0.25);
+  border-left:2px solid #00f0ff;
+  border-radius:0;
 }
+[data-theme="cyberpunk"] .box b{color:#fcee0a;text-shadow:0 0 8px rgba(252,238,10,0.5)}
 [data-theme="cyberpunk"] .bar{
-  background:#080a12;
-  border-color:rgba(0,240,255,0.3);
-  box-shadow:inset 0 0 6px rgba(0,0,0,0.8);
+  background:#060810;
+  border:1px solid #00f0ff;
+  border-radius:0;
 }
 [data-theme="cyberpunk"] .bar>div{
-  background:linear-gradient(90deg,#ff007f,#9d4edd,#00f0ff);
-  box-shadow:0 0 12px rgba(0,240,255,0.8);
+  background:linear-gradient(90deg,#ff0055,#fcee0a,#00f0ff);
+  box-shadow:0 0 14px #fcee0a;
 }
 [data-theme="cyberpunk"] .badge{
-  background:rgba(0,240,255,0.1);
+  background:rgba(0,240,255,0.12);
   color:#00f0ff;
-  border:1px solid rgba(0,240,255,0.25);
+  border:1px solid #00f0ff;
+  border-radius:0;
 }
 [data-theme="cyberpunk"] .badge.ok{
-  background:rgba(0,255,159,0.12);
+  background:rgba(0,255,159,0.15);
   color:#00ff9f;
-  border-color:rgba(0,255,159,0.4);
-  text-shadow:0 0 8px rgba(0,255,159,0.5);
-}
-[data-theme="cyberpunk"] .badge.busy{
-  background:rgba(252,238,10,0.12);
-  color:#fcee0a;
-  border-color:rgba(252,238,10,0.4);
+  border-color:#00ff9f;
+  text-shadow:0 0 6px #00ff9f;
 }
 [data-theme="cyberpunk"] .skin-secret-btn{
-  color:#00f0ff;
+  color:#fcee0a;
   opacity:0.35;
 }
 [data-theme="cyberpunk"] .skin-secret-btn:hover{
   opacity:1;
-  background:rgba(0,240,255,0.15);
-  border-color:#00f0ff;
-  box-shadow:0 0 16px rgba(0,240,255,0.6);
+  background:rgba(252,238,10,0.2);
+  border-color:#fcee0a;
+  box-shadow:0 0 16px rgba(252,238,10,0.7);
 }
 
 /* ==========================================================================
-   작업 2.2: Google AI Studio / Gemini 오로라 플로우 스킨 [data-theme="gemini"]
-   - AI Studio 그라디언트 인디케이터 룩앤필
-   - Gemini 4색 조합 (블루, 퍼플, 마젠타/코랄, 시안) 플로우 애니메이션
-   - 현란하지만 정돈되어 촌스럽지 않은 프리미엄 머티리얼 감성
+   작업 2: Google Gemini / AI Studio 테마 완전 개편 [data-theme="gemini"]
+   - 화면 좌우 대형 유체 오로라 리본 캔버스 애니메이션
+   - 둥근 18px 울트라 글래스모피즘(Ultra-Glassmorphism)
+   - 360도 회전하는 프리즘 오로라 보더(Prism Aurora Border)
+   - 살아 숨쉬는 리퀴드 캡슐 버튼 & 에너지 포털 드롭존
+   - Deep Royal Blue / Cosmic Violet / Vivid Coral Pink / Sky Cyan
    ========================================================================== */
 [data-theme="gemini"]{
-  --bg:#080c15;
-  --card:rgba(14,19,32,0.78);
-  --line:rgba(66,133,244,0.22);
-  --txt:#f0f4fc;
-  --mut:#98a7bd;
+  --bg:#050811;
+  --card:rgba(12,17,30,0.7);
+  --line:rgba(124,77,255,0.28);
+  --txt:#f2f5fd;
+  --mut:#95a4ba;
   --acc:#4285f4;
+  --gemini-blue:#1a73e8;
+  --gemini-sky:#00e5ff;
+  --gemini-purple:#7c4dff;
+  --gemini-pink:#ff4081;
+  --gemini-coral:#fa5560;
   --ok:#34a853;
   --warn:#fbbc04;
   --err:#ea4335;
 }
-[data-theme="gemini"] body{
-  background-color:var(--bg);
-  background-image:
-    radial-gradient(circle at 12% 18%, rgba(66,133,244,0.14) 0%, transparent 45%),
-    radial-gradient(circle at 88% 28%, rgba(124,77,255,0.14) 0%, transparent 50%),
-    radial-gradient(circle at 50% 85%, rgba(250,85,96,0.09) 0%, transparent 50%);
-  background-attachment:fixed;
+
+[data-theme="gemini"] .gemini-bg-wrap{
+  display:block;
 }
+
+/* 화면 좌우 플로우 리본 캔버스 */
+[data-theme="gemini"] .gemini-flow-canvas{
+  position:absolute;
+  top:0;
+  height:100%;
+  width:240px;
+  pointer-events:none;
+  z-index:1;
+  opacity:0.75;
+}
+[data-theme="gemini"] .gemini-flow-left{
+  left:0;
+}
+[data-theme="gemini"] .gemini-flow-right{
+  right:0;
+  transform:scaleX(-1);
+}
+
+/* 앰비언트 코스믹 오로라 구체들 */
+[data-theme="gemini"] .gemini-ambient-orb{
+  position:absolute;
+  border-radius:50%;
+  filter:blur(80px);
+  pointer-events:none;
+  z-index:0;
+  opacity:0.25;
+}
+[data-theme="gemini"] .orb-1{
+  top:10vh;
+  left:15%;
+  width:450px;
+  height:450px;
+  background:radial-gradient(circle,#1a73e8 0%,#7c4dff 60%,transparent 80%);
+  animation:geminiOrbFloat 14s ease-in-out infinite alternate;
+}
+[data-theme="gemini"] .orb-2{
+  top:40vh;
+  right:15%;
+  width:420px;
+  height:420px;
+  background:radial-gradient(circle,#7c4dff 0%,#fa5560 60%,transparent 80%);
+  animation:geminiOrbFloat 12s ease-in-out infinite alternate-reverse;
+}
+[data-theme="gemini"] .orb-3{
+  bottom:10vh;
+  left:35%;
+  width:500px;
+  height:350px;
+  background:radial-gradient(circle,#00e5ff 0%,#1a73e8 60%,transparent 80%);
+  animation:geminiOrbFloat 16s ease-in-out infinite alternate;
+}
+@keyframes geminiOrbFloat{
+  0%{transform:translate(0, 0) scale(1)}
+  50%{transform:translate(30px, -20px) scale(1.08)}
+  100%{transform:translate(-25px, 25px) scale(0.95)}
+}
+
 [data-theme="gemini"] header{
-  border-bottom:1px solid rgba(66,133,244,0.25);
-  background:rgba(10,14,24,0.8);
-  backdrop-filter:blur(14px);
-  box-shadow:0 1px 20px rgba(66,133,244,0.1);
+  background:rgba(8,12,22,0.72);
+  border-bottom:1px solid rgba(124,77,255,0.3);
+  backdrop-filter:blur(24px) saturate(180%);
+  -webkit-backdrop-filter:blur(24px) saturate(180%);
+  box-shadow:0 4px 24px rgba(0,0,0,0.4),0 1px 0 rgba(255,255,255,0.06);
 }
 [data-theme="gemini"] .logo-title{
   background:linear-gradient(120deg,#4285f4 0%,#7c4dff 35%,#ff4081 70%,#00e5ff 100%);
   background-size:260% auto;
   -webkit-background-clip:text;
   -webkit-text-fill-color:transparent;
-  animation:geminiFlowText 6s linear infinite;
+  animation:geminiFlowText 5s linear infinite;
   font-weight:800;
-  letter-spacing:0.3px;
+  letter-spacing:0.4px;
+}
+[data-theme="gemini"] .logo-title::before{
+  content:"✦ ";
+  color:#7c4dff;
+  -webkit-text-fill-color:#7c4dff;
+  font-size:16px;
+  vertical-align:baseline;
 }
 @keyframes geminiFlowText{
   0%{background-position:0% 50%}
   50%{background-position:100% 50%}
   100%{background-position:0% 50%}
 }
+
+/* Gemini 둥근 울트라 글래스모피즘 카드 & 회전 프리즘 림 */
+@property --gemini-angle{
+  syntax:'<angle>';
+  initial-value:0deg;
+  inherits:false;
+}
 [data-theme="gemini"] .card{
   position:relative;
-  background:var(--card);
-  border:1px solid rgba(124,77,255,0.28);
-  border-radius:12px;
-  backdrop-filter:blur(14px);
-  box-shadow:
-    0 10px 30px rgba(0,0,0,0.5),
-    0 0 20px rgba(66,133,244,0.08);
+  background:rgba(12,17,30,0.68);
+  border-radius:18px;
+  border:1px solid rgba(124,77,255,0.22);
+  backdrop-filter:blur(32px) saturate(190%);
+  -webkit-backdrop-filter:blur(32px) saturate(190%);
+  box-shadow:0 16px 40px rgba(0,0,0,0.5),0 0 25px rgba(66,133,244,0.1);
+  overflow:hidden;
 }
-/* AI Studio 시그니처: 카드 상단에 유려하게 흐르는 리퀴드 그라디언트 빔 */
+/* 카드 상단 살아 움직이는 4색 오로라 웨이브 빔 */
 [data-theme="gemini"] .card::before{
   content:"";
   position:absolute;
   top:0;
   left:0;
   right:0;
-  height:2.5px;
+  height:3px;
   background:linear-gradient(90deg,#1a73e8,#7c4dff,#fa5560,#00e5ff,#1a73e8);
   background-size:300% 100%;
-  border-radius:12px 12px 0 0;
-  animation:geminiFlowBorder 5s linear infinite;
+  animation:geminiBeamFlow 4s linear infinite;
+  border-radius:18px 18px 0 0;
 }
-@keyframes geminiFlowBorder{
+@keyframes geminiBeamFlow{
   0%{background-position:0% 0%}
   100%{background-position:300% 0%}
 }
-[data-theme="gemini"] input,
-[data-theme="gemini"] select{
-  background:rgba(10,15,26,0.85);
-  border:1px solid rgba(66,133,244,0.28);
-  color:#f0f4fc;
-  border-radius:8px;
-}
-[data-theme="gemini"] input:focus,
-[data-theme="gemini"] select:focus{
-  outline:none;
-  border-color:#7c4dff;
-  box-shadow:0 0 0 2px rgba(124,77,255,0.3),0 0 14px rgba(66,133,244,0.25);
-}
+
+/* Gemini 리퀴드 캡슐 버튼 (Liquid Prism Capsule) */
 [data-theme="gemini"] button{
-  background:linear-gradient(125deg,#1a73e8 0%,#7c4dff 40%,#ff4081 75%,#00e5ff 100%);
+  background:linear-gradient(125deg,#1a73e8 0%,#7c4dff 40%,#fa5560 75%,#00e5ff 100%);
   background-size:250% 250%;
   border:none;
   color:#fff;
   font-weight:700;
-  border-radius:8px;
-  box-shadow:0 4px 18px rgba(124,77,255,0.4),0 1px 4px rgba(0,0,0,0.3);
-  animation:geminiFlowBtn 6s ease infinite;
-  transition:all .25s cubic-bezier(0.4,0,0.2,1);
+  border-radius:99px;
+  padding:8px 18px;
+  box-shadow:0 4px 20px rgba(124,77,255,0.45),inset 0 1px 0 rgba(255,255,255,0.3);
+  animation:geminiFlowBtn 5s ease infinite;
+  transition:all .28s cubic-bezier(0.4,0,0.2,1);
 }
 @keyframes geminiFlowBtn{
   0%{background-position:0% 50%}
@@ -547,81 +699,104 @@ button:disabled{opacity:.45;cursor:not-allowed}
   100%{background-position:0% 50%}
 }
 [data-theme="gemini"] button:hover:not(:disabled){
-  transform:translateY(-1.5px);
-  box-shadow:0 6px 26px rgba(124,77,255,0.55),0 0 16px rgba(0,229,255,0.35);
-  filter:brightness(1.08);
+  transform:translateY(-1.5px) scale(1.02);
+  box-shadow:0 8px 30px rgba(124,77,255,0.65),0 0 20px rgba(0,229,255,0.4);
+  filter:brightness(1.1);
 }
 [data-theme="gemini"] button.sec{
-  background:rgba(14,20,34,0.85);
-  border:1px solid rgba(124,77,255,0.35);
-  color:#c2d5ff;
-  box-shadow:none;
+  background:rgba(18,25,44,0.7);
+  border:1px solid rgba(124,77,255,0.4);
+  color:#c8d8ff;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.08);
   animation:none;
 }
 [data-theme="gemini"] button.sec:hover:not(:disabled){
-  background:rgba(66,133,244,0.15);
+  background:rgba(66,133,244,0.2);
   border-color:#7c4dff;
   color:#fff;
-  box-shadow:0 0 14px rgba(124,77,255,0.3);
+  box-shadow:0 0 16px rgba(124,77,255,0.35);
 }
+
+/* Gemini 오로라 에너지 포털 드롭존 */
 [data-theme="gemini"] #drop{
-  border:2px dashed rgba(124,77,255,0.35);
-  background:rgba(10,14,25,0.65);
-  border-radius:10px;
-  box-shadow:inset 0 0 20px rgba(66,133,244,0.04);
+  border:2px dashed rgba(124,77,255,0.45);
+  background:radial-gradient(ellipse at 50% 50%, rgba(66,133,244,0.08) 0%, rgba(10,15,28,0.65) 100%);
+  border-radius:18px;
+  backdrop-filter:blur(16px);
+  box-shadow:inset 0 0 30px rgba(124,77,255,0.06),0 8px 24px rgba(0,0,0,0.2);
+  transition:all .3s ease;
 }
 [data-theme="gemini"] #drop:hover{
-  border-color:#7c4dff;
-  color:#c2d5ff;
-  box-shadow:inset 0 0 24px rgba(124,77,255,0.1),0 0 16px rgba(66,133,244,0.2);
+  border-color:#00e5ff;
+  color:#d4e5ff;
+  box-shadow:inset 0 0 40px rgba(66,133,244,0.15),0 0 25px rgba(124,77,255,0.3);
+  transform:scale(1.005);
 }
 [data-theme="gemini"] #drop.over{
-  border-color:#ff4081;
+  border-color:#fa5560;
   color:#fff;
-  background:rgba(255,64,129,0.08);
-  box-shadow:inset 0 0 32px rgba(255,64,129,0.2),0 0 24px rgba(124,77,255,0.35);
+  background:radial-gradient(ellipse at 50% 50%, rgba(250,85,96,0.18) 0%, rgba(124,77,255,0.12) 100%);
+  box-shadow:inset 0 0 50px rgba(250,85,96,0.35),0 0 35px rgba(124,77,255,0.5);
 }
+
+[data-theme="gemini"] input,
+[data-theme="gemini"] select{
+  background:rgba(12,18,32,0.85);
+  border:1px solid rgba(124,77,255,0.3);
+  color:#f2f5fd;
+  border-radius:10px;
+}
+[data-theme="gemini"] input:focus,
+[data-theme="gemini"] select:focus{
+  outline:none;
+  border-color:#7c4dff;
+  box-shadow:0 0 0 2px rgba(124,77,255,0.35),0 0 18px rgba(66,133,244,0.3);
+}
+
 [data-theme="gemini"] .box{
-  background:rgba(11,16,28,0.85);
-  border:1px solid rgba(66,133,244,0.22);
-  border-radius:8px;
+  background:rgba(14,20,36,0.75);
+  border:1px solid rgba(124,77,255,0.25);
+  border-radius:12px;
+  backdrop-filter:blur(12px);
+}
+[data-theme="gemini"] .box b{
+  color:#5cd67c;
+  text-shadow:0 0 10px rgba(92,214,124,0.4);
 }
 [data-theme="gemini"] .bar{
-  background:#090d16;
-  border-color:rgba(124,77,255,0.3);
+  background:#070b16;
+  border-color:rgba(124,77,255,0.35);
+  border-radius:99px;
 }
 [data-theme="gemini"] .bar>div{
   background:linear-gradient(90deg,#1a73e8,#7c4dff,#fa5560,#00e5ff,#1a73e8);
   background-size:250% 100%;
-  animation:geminiProgressFlow 2.4s linear infinite;
-  box-shadow:0 0 12px rgba(124,77,255,0.7);
+  animation:geminiBarFlow 2s linear infinite;
+  box-shadow:0 0 16px rgba(124,77,255,0.8);
 }
-@keyframes geminiProgressFlow{
+@keyframes geminiBarFlow{
   0%{background-position:0% 0%}
   100%{background-position:250% 0%}
 }
 [data-theme="gemini"] .badge{
-  background:rgba(66,133,244,0.12);
-  color:#9cbaff;
-  border:1px solid rgba(66,133,244,0.25);
+  background:rgba(66,133,244,0.15);
+  color:#a5c2ff;
+  border:1px solid rgba(124,77,255,0.35);
+  border-radius:99px;
 }
 [data-theme="gemini"] .badge.ok{
-  background:rgba(52,168,83,0.15);
+  background:rgba(52,168,83,0.18);
   color:#5cd67c;
-  border-color:rgba(52,168,83,0.4);
-}
-[data-theme="gemini"] .badge.busy{
-  background:rgba(251,188,4,0.15);
-  color:#fbbc04;
-  border-color:rgba(251,188,4,0.4);
+  border-color:rgba(52,168,83,0.5);
+  text-shadow:0 0 8px rgba(92,214,124,0.5);
 }
 [data-theme="gemini"] .skin-secret-btn{
-  color:#9cbaff;
-  opacity:0.3;
+  color:#a5c2ff;
+  opacity:0.35;
 }
 [data-theme="gemini"] .skin-secret-btn:hover{
   opacity:1;
-  background:rgba(124,77,255,0.18);
+  background:rgba(124,77,255,0.22);
   border-color:#7c4dff;
-  box-shadow:0 0 16px rgba(124,77,255,0.5);
+  box-shadow:0 0 18px rgba(124,77,255,0.6);
 }
