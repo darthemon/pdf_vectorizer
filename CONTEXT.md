@@ -1,7 +1,7 @@
 # 📄 PDF Vectorizer 컨텍스트 가이드 (CONTEXT.md)
 
 이 문서는 프로젝트의 **공용 기록 보관소(공유 두뇌)** 입니다. 아키텍처, 파일 역할, 핵심 함수 위치, 절대 훼손되면 안 되는 **불변 규칙**, 배포/테스트 방법, 결정 이력과 알려진 한계를 담습니다.
-코드를 바꾸면 이 문서의 관련 절도 **같은 작업 안에서** 함께 고치세요. (마지막 전면 검토: 2026-11-10, 코드와 대조 완료)
+코드를 바꾸면 이 문서의 관련 절도 **같은 작업 안에서** 함께 고치세요. (마지막 전면 검토: 2026-11-11 v1.5.0, 코드와 대조 완료)
 
 ---
 
@@ -19,21 +19,24 @@
 ```
 pdf-vectorizer/
 ├── index.html        # HTML 마크업 + 외부 CDN 라이브러리 링크 (스크립트/스타일은 외부 파일 연결)
-├── style.css         # 다크 테마 전역 스타일, .grid4/.box 정보 카드, 오로라 웨이브 카드, 배지/툴팁
-├── app.js            # 전체 비즈니스 로직 (모델 감지·필터, 변환 파이프라인, 분할, 내보내기)
-├── CONTEXT.md        # 본 문서
-├── app.py            # (선택·레거시) 로컬 서빙/CORS 프록시 백엔드 — 웹 배포본과 무관
-├── gui_launcher.py   # (선택·레거시) 로컬 GUI 런처 — 웹 배포본과 무관. 메모리/렉 문제로 더 이상 권장하지 않음
-├── run_server.bat/.sh, launcher.sh  # 로컬 실행 보조 스크립트 (웹 배포와 무관)
-└── index.backup.html # 단일 파일 시절(구버전) 백업. .gitignore(*.backup.*)로 제외됨
+├── style.css         # 다크 테마 전역 스타일, 비주얼 스킨(사이버펑크/제미나이), 정보 카드, 오로라 카드, 모달
+├── app.js            # 전체 비즈니스 로직 (모델 감지·필터, 변환 파이프라인, 분할, 내보내기, 스킨 전환)
+├── CONTEXT.md        # 본 문서 (프로젝트 두뇌)
+└── legacy/           # (과거 로컬/레거시 파일 모음 - 웹 배포본과 무관)
+    ├── app.py            # 로컬 서빙/CORS 프록시 백엔드 (구버전)
+    ├── gui_launcher.py   # 로컬 GUI 런처 (구버전)
+    ├── run_server.bat/.sh, launcher.sh  # 로컬 실행 보조 스크립트
+    ├── index.backup.html # 단일 파일 시절(구버전) 백업
+    ├── server.log, .env_key, temp_workspace/, venv/ (.gitignore 대상)
+    └── README.md         # legacy 디렉토리 안내문
 ```
 
 - 과거에는 `index.html` **단일 파일**이었으나 커밋 `9390a68`에서 HTML/CSS/JS 3파일로 분리되었습니다. **배포 시 세 파일(`index.html`, `style.css`, `app.js`)이 모두 올라가야 합니다.**
-- 사용자는 `python gui_launcher.py` 없이 `index.html`을 브라우저로 열거나 GitHub Pages로 접속하면 됩니다. (`file://`에서 CDN/워커가 막히면 `python -m http.server`)
+- 현재는 100% Client-Side 웹 애플리케이션으로 동작하며, 과거 로컬 런처/서버 관련 파일은 `legacy/` 하위로 완전 격리 분류되었습니다.
 
 ### 각 파일의 역할
-1. **`index.html`**: UI 마크업(API 키 입력 `#apiKeyInput`, 상태 배지 `#apiStatusBadge`, 모델 드롭다운 `#modelSelect`, 병렬 배수 `#concurrencySelect`, 쪽 번호 및 머리글/바닥글 옵션 `#optPgNum`/`#optPgHeader`/`#optPgFooter`, 드롭존, 4칸 정보 박스, 진행 카드, 결과/내보내기 카드). CDN 로드: PDF.js 3.11.174, Marked, Mermaid 10, KaTeX 0.16, html2canvas, jsPDF, JSZip.
-2. **`style.css`**: 컬러 변수(`:root`), `.grid4`/`.box`, `.gemini-wave-card`, `.badge`, `.custom-tooltip`.
+1. **`index.html`**: UI 마크업(API 키 입력 `#apiKeyInput`, 상태 배지 `#apiStatusBadge`, 모델 드롭다운 `#modelSelect`, 병렬 배수 `#concurrencySelect`, 쪽 번호 및 머리글/바닥글 옵션 `#optPgNum`/`#optPgHeader`/`#optPgFooter`, 드롭존, 4칸 정보 박스, 진행 카드, 결과/내보내기 카드, 숨겨진 스킨 스위처 버튼 `#skinSecretBtn`, 스킨 선택 모달 `#skinModal`). CDN 로드: PDF.js 3.11.174, Marked, Mermaid 10, KaTeX 0.16, html2canvas, jsPDF, JSZip.
+2. **`style.css`**: 컬러 변수(`:root`), 기본 옵시디언 다크 테마, 사이버펑크 2077 네온 펑크 테마(`[data-theme="cyberpunk"]`), Google AI Studio 코스믹 플로우 테마(`[data-theme="gemini"]`), `.grid4`/`.box`, `.gemini-wave-card`, `.badge`, `.custom-tooltip`, 스킨 모달 팝업.
 3. **`app.js`**: 아래 2절 표 참고.
 
 ---
@@ -57,8 +60,9 @@ pdf-vectorizer/
 | **Markdown → HTML** | `mdToHtml(md)`, `renderPagesHtml(bodies)`, `fitWideMath(root)` | 수식 보호(`@@MATH n@@`) → marked(`breaks:true`) → KaTeX 치환, Mermaid→SVG, 본문보다 넓은 블록 수식은 글자 축소 |
 | **A4 분할 & 결과 생성** | `buildAndPrint(cache)`, `computePageCuts(stage, Hpx)`, `makeOutputsFromPages(pagesHtml, infos)` | 페이지 경계 계산, 5종 포맷 Blob 생성 (이름은 레거시, **인쇄 창은 띄우지 않음**). PDF는 A4 캔버스에 본문 조각+머리글/바닥글을 합성 |
 | **다운로드** | `download(kind, ext)`, `updateExportFormatUI()` | PDF / PNG / PNG-ZIP / HTML / MD |
+| **비주얼 스킨 & 테마** | `VALID_SKINS`, `applyTheme(skin)`, `initSkinSwitcher()` | 기본 다크, 사이버펑크 2077 네온, Gemini AI Studio 오로라 플로우 3종 스킨 전환 및 `localStorage` 영구 유지 |
 
-저장소 키: `localStorage['pdfvec.settings.v2']`(키·모델·병렬 배수·`pgNum`/`pgHeader`/`pgFooter` 페이지 서식 옵션), `sessionStorage['pdfvec:<파일명>:<크기>:<수정시각>']`(페이지별 마크다운 캐시 = 이어하기).
+저장소 키: `localStorage['pdfvec.settings.v2']`(키·모델·병렬 배수·`pgNum`/`pgHeader`/`pgFooter` 페이지 서식 옵션, `skin` 테마), `sessionStorage['pdfvec:<파일명>:<크기>:<수정시각>']`(페이지별 마크다운 캐시 = 이어하기).
 
 ---
 
@@ -148,6 +152,8 @@ pdf-vectorizer/
 - `sessionStorage` 캐시 + **[이어하기]**(중단/실패 후 이어서), 잔액 소진 등으로 중단 가능.
 - 응답 `usage`(prompt/completion tokens) 기반 실측 집계. 없으면 글자 수로 역산하고 로그에 `(추정)` 표기.
 - 429 백오프, 즉각 중단, 절전 방지, 지능형 분할, 5종 내보내기, 등급 배지/툴팁.
+- **비주얼 스킨 시스템 (v1.5.0)**: 헤더 우측 숨겨진 버튼(`✦`), 로고 클릭, `Alt+S` 단축키로 토글되는 테마 스위처. 기본 옵시디언 다크, 사이버펑크 2077 네온 펑크(`data-theme="cyberpunk"`), Google AI Studio 코스믹 플로우(`data-theme="gemini"`) 3종 스킨 지원 및 `localStorage` 영구 보존.
+- **아키텍처 경량화 (v1.5.0)**: 웹 배포에 불필요한 과거 로컬 백엔드/런처/스크립트를 `legacy/` 디렉토리로 완전 분리.
 
 ---
 
@@ -177,7 +183,11 @@ pdf-vectorizer/
 6. 분할: 고정 높이 슬라이스(표/글줄 잘림) → **`computePageCuts`** 로 표·제목·그림 보호.
 7. OCR: 서식(제목/굵게)과 수식(LaTeX) 보존 강화 — 프롬프트 개편 + 수식 보호 파이프라인.
 8. 코드 3파일 분리(`9390a68`), `convert()`의 `done` TDZ 오류 수정(`eb2288a`).
-9. (2026-11-10) 머리글/쪽 번호가 본문 중간에 섞이거나 배치·표·수식이 깨지는 문제 대응: 쪽 번호/머리글/바닥글을 본문과 분리(`PAGE` 메타 줄 + 후처리)하고 사용자 옵션으로 기록, 프롬프트에 줄바꿈·정렬·열 나열 표·여러 줄 수식 규칙 추가. 기존 "쪽 번호 생략" 규칙은 "옵션에 따라 기록"으로 대체. 옵션 UI는 `index.html` 상단 설정 카드에 `#optPgNum`, `#optPgHeader`, `#optPgFooter`로 정식 마크업되어 페이지 접속 즉시 설정 가능.
+9. (2026-11-10) 머리글/쪽 번호가 본문 중간에섞이거나 배치·표·수식이 깨지는 문제 대응: 쪽 번호/머리글/바닥글을 본문과 분리(`PAGE` 메타 줄 + 후처리)하고 사용자 옵션으로 기록, 프롬프트에 줄바꿈·정렬·열 나열 표·여러 줄 수식 규칙 추가. 기존 "쪽 번호 생략" 규칙은 "옵션에 따라 기록"으로 대체. 옵션 UI는 `index.html` 상단 설정 카드에 `#optPgNum`, `#optPgHeader`, `#optPgFooter`로 정식 마크업되어 페이지 접속 즉시 설정 가능.
+10. (2026-11-11, v1.5.0) 파일 구조 정리 & 비주얼 스킨 시스템 구축:
+    - 과거 로컬 Flask 서버(`app.py`)/PyWebView GUI 런처(`gui_launcher.py`)/로컬 셸 스크립트/백업 등 불필요한 레거시 파일들을 `legacy/` 디렉토리로 격리 분류하여 웹 배포 루트를 `index.html`, `style.css`, `app.js` 중심으로 경량화 및 청정화.
+    - 숨겨진 트리거(헤더 우측 `✦` 버튼 `#skinSecretBtn`, 로고 클릭 `#logoTitle`, `Alt+S` 단축키)로 활성화되는 스킨 변경 모달 UI(`#skinModal`) 구현.
+    - 3종 스킨 지원: ① 기본 옵시디언 다크, ② 사이버펑크 2077 네온 신스웨이브 룩(`data-theme="cyberpunk"`), ③ Google AI Studio 코스믹 오로라 플로우 룩(`data-theme="gemini"`). 선택 스킨은 `localStorage`에 영구 보존.
 
 ---
 

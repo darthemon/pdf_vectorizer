@@ -6,3 +6,13 @@ __pycache__/
 server.log
 temp_workspace/
 *.backup.*
+
+# legacy subfolder ignore
+legacy/.env*
+legacy/venv/
+legacy/__pycache__/
+legacy/*.pyc
+legacy/server.log
+legacy/temp_workspace/
+legacy/*.backup.*
+

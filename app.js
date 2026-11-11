@@ -116,7 +116,7 @@ mermaid.initialize({ startOnLoad:false, securityLevel:'loose', theme:'default' }
 
 /* ---------- 설정 저장 (localStorage) ---------- */
 const LS = 'pdfvec.settings.v2';
-const state = { key:'', model:DEFAULT_MODEL, conc:'4', pgNum:'off', pgHeader:false, pgFooter:false };
+const state = { key:'', model:DEFAULT_MODEL, conc:'4', pgNum:'off', pgHeader:false, pgFooter:false, skin:'default' };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS)||'{}')); } catch(e){}
 const save = () => localStorage.setItem(LS, JSON.stringify(state));
 
@@ -516,6 +516,7 @@ function init(){
   $('concurrencySelect').value = state.conc;
   $('apiKeyInput').value = state.key;
   initPageOptions();
+  initSkinSwitcher();
   updateProviderCardUi();
   autoDetectAndLoadModels(state.key);
 }
@@ -1089,6 +1090,73 @@ function initPageOptions(){
     t = setTimeout(rebuildFromCache, 300);
   };
   [selNum, chkHeader, chkFooter].forEach(el => el.addEventListener('change', onChange));
+}
+
+/* ---------- 비주얼 스킨 / 테마 관리 ---------- */
+const VALID_SKINS = ['default', 'cyberpunk', 'gemini'];
+
+function applyTheme(skinName){
+  const skin = VALID_SKINS.includes(skinName) ? skinName : 'default';
+  state.skin = skin;
+  if (skin === 'default') {
+    document.documentElement.removeAttribute('data-theme');
+  } else {
+    document.documentElement.setAttribute('data-theme', skin);
+  }
+  document.querySelectorAll('.skin-option-card').forEach(card => {
+    card.classList.toggle('active', card.dataset.skin === skin);
+  });
+  save();
+}
+
+function initSkinSwitcher(){
+  const modal = $('skinModal');
+  const btnSecret = $('skinSecretBtn');
+  const logo = $('logoTitle');
+  const btnClose = $('skinModalClose');
+  const backdrop = $('skinModalBackdrop');
+  if (!modal) return;
+
+  const openModal = () => {
+    modal.classList.remove('hidden');
+    const activeCard = modal.querySelector(`.skin-option-card[data-skin="${state.skin || 'default'}"]`);
+    if (activeCard) activeCard.focus();
+  };
+  const closeModal = () => modal.classList.add('hidden');
+  const toggleModal = () => modal.classList.contains('hidden') ? openModal() : closeModal();
+
+  if (btnSecret) btnSecret.onclick = toggleModal;
+  if (logo) logo.onclick = toggleModal;
+  if (btnClose) btnClose.onclick = closeModal;
+  if (backdrop) backdrop.onclick = closeModal;
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+      closeModal();
+    } else if (e.altKey && (e.key === 's' || e.key === 'S')) {
+      e.preventDefault();
+      toggleModal();
+    }
+  });
+
+  const cards = modal.querySelectorAll('.skin-option-card');
+  cards.forEach(card => {
+    const pick = () => {
+      const skin = card.dataset.skin;
+      applyTheme(skin);
+      setTimeout(closeModal, 200);
+    };
+    card.onclick = pick;
+    card.onkeydown = e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        pick();
+      }
+    };
+  });
+
+  // 초기 저장된 스킨 적용
+  applyTheme(state.skin || 'default');
 }
 let building = false, rebuildQueued = false;
 async function rebuildFromCache(){

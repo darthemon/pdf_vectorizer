@@ -7,7 +7,19 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>PDF Vectorizer <span class="hint">API 키는 로컬 스토리지에만 저장됩니다.</span></header>
+<header>
+  <div class="header-inner">
+    <div class="header-left">
+      <span class="logo-title" id="logoTitle" title="비주얼 스킨 변경 (클릭)">PDF Vectorizer</span>
+      <span class="hint">API 키는 로컬 스토리지에만 저장됩니다.</span>
+    </div>
+    <div class="header-right">
+      <button id="skinSecretBtn" class="skin-secret-btn" title="🎨 비주얼 스킨 변경 (단축키: Alt+S)" aria-label="스킨 변경">
+        <span class="skin-secret-sparkle">✦</span>
+      </button>
+    </div>
+  </div>
+</header>
 <main>
 
 <section class="card">
@@ -114,6 +126,73 @@
 
 </main>
 
+<!-- 스킨 변경 플로팅 모달 -->
+<div id="skinModal" class="skin-modal hidden" role="dialog" aria-modal="true" aria-labelledby="skinModalTitle">
+  <div class="skin-modal-backdrop" id="skinModalBackdrop"></div>
+  <div class="skin-modal-dialog">
+    <div class="skin-modal-header">
+      <div class="skin-modal-title" id="skinModalTitle">
+        <span class="sparkle-icon">✦</span> 테마 및 비주얼 스킨
+      </div>
+      <button id="skinModalClose" class="skin-modal-close" aria-label="닫기">✕</button>
+    </div>
+    <div class="skin-modal-body">
+      <p class="skin-modal-desc">원하는 디자인 룩을 선택하세요. 즉시 적용되며 브라우저에 저장됩니다.</p>
+      <div class="skin-options">
+        
+        <!-- 1. 기본 옵시디언 다크 -->
+        <div class="skin-option-card" data-skin="default" tabindex="0">
+          <div class="skin-preview preview-default">
+            <div class="pv-bar"></div>
+            <div class="pv-box"></div>
+          </div>
+          <div class="skin-meta">
+            <div class="skin-meta-top">
+              <span class="skin-title">옵시디언 다크</span>
+              <span class="skin-tag classic">DEFAULT</span>
+            </div>
+            <div class="skin-subtitle">눈이 편안한 미니멀 다크 모드</div>
+          </div>
+          <span class="skin-check-badge">✓</span>
+        </div>
+
+        <!-- 2. 사이버펑크 2077 네온 룩 -->
+        <div class="skin-option-card" data-skin="cyberpunk" tabindex="0">
+          <div class="skin-preview preview-cyberpunk">
+            <div class="pv-bar"></div>
+            <div class="pv-box"></div>
+          </div>
+          <div class="skin-meta">
+            <div class="skin-meta-top">
+              <span class="skin-title">사이버펑크 2077</span>
+              <span class="skin-tag neon">NEON PUNK</span>
+            </div>
+            <div class="skin-subtitle">신스웨이브 네온 & 핫핑크 글리터</div>
+          </div>
+          <span class="skin-check-badge">✓</span>
+        </div>
+
+        <!-- 3. Gemini AI Studio 플로우 -->
+        <div class="skin-option-card" data-skin="gemini" tabindex="0">
+          <div class="skin-preview preview-gemini">
+            <div class="pv-bar"></div>
+            <div class="pv-box"></div>
+          </div>
+          <div class="skin-meta">
+            <div class="skin-meta-top">
+              <span class="skin-title">AI Studio 플로우</span>
+              <span class="skin-tag gemini">GEMINI</span>
+            </div>
+            <div class="skin-subtitle">살아 움직이는 오로라 그라디언트 인디케이터</div>
+          </div>
+          <span class="skin-check-badge">✓</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
 
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
@@ -123,6 +202,6 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="app.js?v=20261111"></script>
+<script src="app.js?v=20261111_skin"></script>
 </body>
 </html>
