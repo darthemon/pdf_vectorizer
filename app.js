@@ -116,7 +116,7 @@ mermaid.initialize({ startOnLoad:false, securityLevel:'loose', theme:'default' }
 
 /* ---------- 설정 저장 (localStorage) ---------- */
 const LS = 'pdfvec.settings.v2';
-const state = { key:'', model:DEFAULT_MODEL, conc:'4' };
+const state = { key:'', model:DEFAULT_MODEL, conc:'4', pgNum:'off', pgHeader:false, pgFooter:false };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS)||'{}')); } catch(e){}
 const save = () => localStorage.setItem(LS, JSON.stringify(state));
 
@@ -624,10 +624,12 @@ TEXT & FORMATTING (be explicit, this matters most):
 - Bold text => **bold**. Italic text => *italic*. Bold+italic => ***text***. Underlined or emphasized words (dots, boxes) => **text**. Apply it only to the exact words that are styled, not whole sentences by default.
 - Superscript/subscript in normal text: <sup>2</sup> / <sub>2</sub>. Strikethrough => ~~text~~.
 - Lists: keep the original markers and numbering ("1.", "(1)", "-", "•" => "-"), keep nesting with 2-space indentation.
-- Paragraphs: join lines within a paragraph into one line (remove hard line breaks and fix hyphenation caused by line wrapping only); separate paragraphs with a blank line. Keep poems/code/addresses line by line.
+- Paragraphs: join lines within a normal running paragraph into one line (remove hard line breaks and fix hyphenation caused by line wrapping only); separate paragraphs with a blank line. Do NOT join lines that are separate on purpose: poems, lyrics, dialogue, addresses, answer keys, vocabulary/term lists, short one-item-per-line arrangements, vertical calculations. Keep those line by line (one source line = one output line).
+- Alignment: centered text => <p align="center">text</p>, right-aligned text => <p align="right">text</p>. Keep deliberate indentation of a first line only if it marks a new paragraph (just start a new paragraph). Keep a sentence that is cut off by the page edge exactly as cut; never complete it or merge it with other pages.
 - Block quotes, examples, definitions, boxed notes: use "> " for the box content and keep their titles in **bold**.
 - Footnotes/endnotes: keep them at the end of the page, as "[^n]: text" with the matching [^n] marker in the body, or as plain small lines if no marker.
-- Omit only pure page furniture: page numbers and repeated running headers/footers.
+- PAGE FURNITURE (critical): page numbers, running headers (book/chapter title strip at the top margin), running footers, and decorative page templates (watermarks, scanner marks, shadows, stamps, crop marks, binding shadows) are NOT body text. NEVER write them inside the Markdown body, not at the start, not in the middle, not at the end. Footnotes and margin notes that carry real content are NOT furniture and must be kept.
+- Instead, put the furniture on the very last line of the output as exactly one HTML comment: <!--PAGE {"num":"printed page number or empty","header":"running header text or empty","footer":"running footer text or empty"}-->  (valid JSON, escape double quotes inside values with a backslash). Always output this line, with empty strings when nothing exists.
 - Reading order: follow the natural order; for multi-column pages read column by column.
 
 MATH (never output broken or code-formatted math):
@@ -635,7 +637,15 @@ MATH (never output broken or code-formatted math):
 - Chemical formulas and units may use math too, e.g. $\\mathrm{H_2O}$.
 - NEVER put math inside backticks or code fences. NEVER escape the dollar signs. A currency "$" in running text must be written as \\$ .
 
-TABLES: convert every table to a GitHub Markdown table (header row + separator row). Keep every cell's text exactly; use <br> for line breaks inside a cell; math inside cells uses $...$.
+MATH (multi-line equations & tables inside math):
+- Multi-line equations (aligned steps, systems, cases, derivations): keep them in ONE $$...$$ block using \\begin{aligned}...\\end{aligned} / \\begin{cases}...\\end{cases}, one source line per row separated by \\\\ , aligned at the original "=" signs with &. Never split one derivation into separate paragraphs. Equation numbers like (3.1) => \\tag{3.1}. Numbered problems with equations keep the number as text before the math.
+- Inside table cells never use a bare | in math (write \\vert or \\mid).
+
+TABLES & ARRANGEMENTS (layout fidelity matters):
+- Convert every ruled table to a GitHub Markdown table (header row + separator row). Keep every cell's text exactly; use <br> for line breaks inside a cell; math inside cells uses $...$. Preserve the exact number of rows and columns; empty cells stay empty (never shift text into a neighbor cell). Merged cells: leave the covered cells empty and put the text in the first cell.
+- Use the separator row to keep alignment: |:---| left, |:---:| centered, |---:| right (numbers and amounts are usually right-aligned or centered as in the original).
+- Borderless arrangements that visually form columns or a grid (simple word lists in columns, answer grids, schedules, term/definition pairs, aligned numbers, vertical arithmetic) are ALSO tables: output a Markdown table in the original row/column order. If there is no header row, use an empty header row (| | | |) followed by the separator. Do not flatten them into one running paragraph.
+- Multiple-choice options (①②③④⑤) keep their markers and order; put each option on its own line unless they clearly sit on the same line in the original.
 
 FIGURES: flowcharts/diagrams/graphs with structure => a fenced \`\`\`mermaid block (valid syntax, keep all labels exactly). Charts, photos, illustrations => one line "*[그림: short description in the page's language, include caption text exactly]*". Always keep figure captions as text.
 
@@ -909,6 +919,10 @@ pre{background:#f5f5f5;padding:8px;white-space:pre-wrap;break-inside:avoid}
 img,svg{max-width:100%;height:auto}
 .mermaid-svg{text-align:center;margin:10px 0;break-inside:avoid}
 blockquote{border-left:3px solid #bbb;margin:8px 0;padding-left:10px;color:#444}
+.katex-display{overflow-x:auto;overflow-y:hidden}
+td,th{overflow-wrap:anywhere;line-height:1.5}
+.pg-h{text-align:center;color:#666;font-size:9pt;border-bottom:.5pt solid #ccc;padding-bottom:3pt;margin-bottom:10pt}
+.pg-f{display:flex;justify-content:space-between;color:#666;font-size:9pt;border-top:.5pt solid #ccc;padding-top:3pt;margin-top:12pt}
 `;
 /* 화면 밖 렌더링용(PDF/PNG 캔버스 캡처) 스타일 – 폭 700px ≒ A4 본문폭 */
 const STAGE_CSS = `
@@ -925,6 +939,9 @@ const STAGE_CSS = `
 #stage table{border-collapse:collapse;width:100%;margin:8px 0;font-size:14px}
 #stage th,#stage td{border:1px solid #888;padding:4px 7px;vertical-align:top}
 #stage th{background:#eee}
+#stage td,#stage th{overflow-wrap:anywhere;line-height:1.5}
+#stage ul,#stage ol{margin:.5em 0;padding-left:1.6em}
+#stage li>p{margin:.2em 0}
 #stage pre,#stage code{font-family:Consolas,monospace;font-size:13px}
 #stage pre{background:#f5f5f5;padding:8px;white-space:pre-wrap}
 #stage img,#stage svg{max-width:100%;max-height:960px;height:auto}
@@ -942,6 +959,149 @@ const baseName = () => {
 };
 const fmtSize = b => b > 1048576 ? (b/1048576).toFixed(2)+' MB' : Math.max(1,Math.round(b/1024))+' KB';
 
+/* ---------- 쪽 번호 / 머리글·바닥글(페이지 서식) ---------- */
+const PAGE_META_RE = /<!--\s*PAGE\s*(\{[\s\S]*?\})\s*-->/gi;
+const mdPlain = s => String(s||'').replace(/<[^>]+>/g,'').replace(/[*_`~#>]/g,'').trim();
+const furnKey = s => mdPlain(s).replace(/[\s\d\u00a0|·•\-–—~./()\[\]:]+/g,' ').trim().toLowerCase();
+const isPageNumLine = s => /^[-–—\s]*(?:p\.?\s*)?\d{1,4}(?:\s*(?:\/|of)\s*\d{1,4})?[-–—\s]*$/i.test(mdPlain(s));
+
+function splitPageMeta(md){
+  const meta = { num:'', header:'', footer:'' };
+  const body = String(md||'').replace(PAGE_META_RE, (m, j) => {
+    try { const o = JSON.parse(j); for (const k of ['num','header','footer']) if (o[k] != null) meta[k] = String(o[k]).trim(); } catch(e){}
+    return '';
+  }).replace(/<!--\s*PAGE[\s\S]*?-->/gi,'').trim();
+  return { body, meta };
+}
+
+/* 본문 맨 위/아래 2줄에서 머리글·바닥글·쪽 번호가 섞여 들어온 줄을 제거 */
+function stripFurniture(body, meta, rep){
+  const lines = body.split('\n');
+  const known = new Set([furnKey(meta.header), furnKey(meta.footer)].filter(k => k.length >= 2));
+  const isFurn = ln => {
+    const t = ln.trim();
+    if (!t || t.length > 120) return null;
+    const k = furnKey(t);
+    if (meta.num && isPageNumLine(t) && mdPlain(t).replace(/\D/g,'') === meta.num.replace(/\D/g,'')) return 'num';
+    if (k.length >= 2 && known.has(k)) return 'known';
+    if (k.length >= 4 && rep.has(k) && !/^\s*([#>|$\-*+]|\d+[.)]\s)/.test(t)) return 'rep';
+    return null;
+  };
+  const got = { header:'', footer:'' };
+  for (const side of ['top','bottom']){
+    for (let n=0; n<2; n++){
+      const idx = side === 'top' ? lines.findIndex(l => l.trim()) : (() => { for (let i=lines.length-1;i>=0;i--) if (lines[i].trim()) return i; return -1; })();
+      if (idx < 0) break;
+      const kind = isFurn(lines[idx]);
+      if (!kind) break;
+      if (kind === 'rep') got[side === 'top' ? 'header' : 'footer'] ||= mdPlain(lines[idx]);
+      lines.splice(idx, 1);
+    }
+  }
+  return { body: lines.join('\n').trim(), header: got.header, footer: got.footer };
+}
+
+/* 캐시 → 페이지별 {body,num,header,footer}. 여러 페이지에 반복되는 짧은 맨 위/아래 줄도 머리글/바닥글로 간주 */
+function preparePages(cache){
+  const raw = Array.from({length: totalPages}, (_, i) => splitPageMeta(cache[i+1] || ''));
+  const rep = new Set();
+  if (totalPages >= 4){
+    const cnt = new Map();
+    raw.forEach(({ body }) => {
+      const ls = body.split('\n').map(l => l.trim()).filter(Boolean);
+      const keys = new Set([...ls.slice(0,2), ...ls.slice(-2)].filter(l => l.length <= 100 && !/^([#>|$\-*+]|\d+[.)]\s)/.test(l)).map(furnKey).filter(k => k.length >= 4));
+      keys.forEach(k => cnt.set(k, (cnt.get(k)||0) + 1));
+    });
+    const need = Math.max(3, Math.ceil(totalPages * 0.4));
+    cnt.forEach((c, k) => { if (c >= need) rep.add(k); });
+  }
+  return raw.map(({ body, meta }) => {
+    const s = stripFurniture(body, meta, rep);
+    return { body: s.body, num: meta.num, header: meta.header || s.header, footer: meta.footer || s.footer };
+  });
+}
+
+/* 사용자 옵션에 따른 페이지 표시 문구. seqNo: 출력 페이지 순번 */
+function pageDeco(info, idx, seqNo){
+  let num = '';
+  if (state.pgNum === 'orig') num = info.num || String(idx + 1);
+  else if (state.pgNum === 'seq') num = String(seqNo != null ? seqNo : idx + 1);
+  return { header: state.pgHeader ? (info.header||'') : '', footer: state.pgFooter ? (info.footer||'') : '', num };
+}
+const hasDeco = d => !!(d.header || d.footer || d.num);
+
+function drawDeco(ctx, cw, mx, yHead, yFoot, fontPx, d){
+  ctx.save();
+  ctx.fillStyle = '#555'; ctx.textBaseline = 'middle';
+  ctx.font = `${Math.round(fontPx)}px "Malgun Gothic","Noto Sans KR",system-ui,sans-serif`;
+  const maxW = cw - 2*mx;
+  const clip = (t, w) => { t = String(t); if (ctx.measureText(t).width <= w) return t; while (t.length > 1 && ctx.measureText(t + '…').width > w) t = t.slice(0, -1); return t + '…'; };
+  if (d.header){ ctx.textAlign = 'center'; ctx.fillText(clip(d.header, maxW), cw/2, yHead); }
+  if (d.footer){ ctx.textAlign = 'left'; ctx.fillText(clip(d.footer, maxW * (d.num ? 0.82 : 1)), mx, yFoot); }
+  if (d.num){ ctx.textAlign = d.footer ? 'right' : 'center'; ctx.fillText(d.num, d.footer ? cw - mx : cw/2, yFoot); }
+  ctx.restore();
+}
+
+/* 원본 한 페이지 캔버스에 머리글/바닥글 띠를 덧붙여 PNG용 캔버스 생성 */
+function decorateCanvas(cv, d){
+  if (!hasDeco(d)) return cv;
+  const pxmm = cv.width / 186, band = Math.round(9 * pxmm);
+  const out = document.createElement('canvas');
+  out.width = cv.width; out.height = cv.height + band*2;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(cv, 0, band);
+  drawDeco(ctx, out.width, 12*pxmm/2, band/2, out.height - band/2, 2.9*pxmm, d);
+  cv.width = cv.height = 0;
+  return out;
+}
+
+/* 수식·표가 본문 폭보다 넓으면 글자 크기를 줄여 잘림 방지 */
+function fitWideMath(root){
+  const cs = getComputedStyle(root);
+  const maxW = root.clientWidth - (parseFloat(cs.paddingLeft)||0) - (parseFloat(cs.paddingRight)||0);
+  root.querySelectorAll('.katex-display > .katex').forEach(k => {
+    const inner = k.querySelector('.katex-html') || k;
+    const w = inner.getBoundingClientRect().width;
+    if (w > maxW) k.style.fontSize = (1.21 * (maxW / w) * 0.98).toFixed(3) + 'em';
+  });
+}
+
+/* 옵션 UI (index.html 수정 없이 주입) */
+function injectPageOptionUi(){
+  if ($('pgOptBox')) return;
+  const box = document.createElement('div');
+  box.id = 'pgOptBox';
+  box.style.cssText = 'margin:14px 0;padding:12px 14px;border:1px solid rgba(148,163,184,.35);border-radius:10px;font-size:14px;line-height:1.9';
+  box.innerHTML = `<div style="font-weight:700;margin-bottom:4px">📑 페이지 서식 기록 옵션</div>
+    <label>쪽 번호&nbsp;
+      <select id="optPgNum"><option value="off">기록 안 함</option><option value="orig">원본 쪽 번호 (없으면 순번)</option><option value="seq">출력 페이지 순번</option></select>
+    </label><br>
+    <label><input type="checkbox" id="optPgHeader"> 머리글(반복 상단 문구) 기록</label>&emsp;
+    <label><input type="checkbox" id="optPgFooter"> 바닥글(반복 하단 문구) 기록</label>
+    <div style="opacity:.65;font-size:12px">변환 후에도 바꾸면 API 호출 없이 결과 파일이 즉시 다시 생성됩니다. 선택하지 않은 서식은 본문에 섞이지 않고 제외됩니다.</div>`;
+  const host = $('analysisPanel') || $('resultCard') || document.body;
+  host.appendChild(box);
+  $('optPgNum').value = state.pgNum;
+  $('optPgHeader').checked = !!state.pgHeader;
+  $('optPgFooter').checked = !!state.pgFooter;
+  let t;
+  const onChange = () => {
+    state.pgNum = $('optPgNum').value; state.pgHeader = $('optPgHeader').checked; state.pgFooter = $('optPgFooter').checked; save();
+    clearTimeout(t); t = setTimeout(rebuildFromCache, 300);
+  };
+  ['optPgNum','optPgHeader','optPgFooter'].forEach(id => $(id).addEventListener('change', onChange));
+}
+let building = false, rebuildQueued = false;
+async function rebuildFromCache(){
+  if (running || !totalPages || $('resultCard').classList.contains('hidden')) return;
+  if (building){ rebuildQueued = true; return; }
+  const cache = loadCache();
+  if (Object.keys(cache).length < totalPages) return;
+  log('↻ 페이지 서식 옵션 적용 – 결과 파일 다시 생성');
+  await buildAndPrint(cache);
+}
+
 /* 마크다운 → HTML (수식은 marked가 건드리지 못하게 보호했다가 KaTeX로 렌더) */
 function mdToHtml(md){
   const store = [];
@@ -954,7 +1114,7 @@ function mdToHtml(md){
       .replace(/\\\(([\s\S]+?)\\\)/g, (m,t) => put(t,false))
       .replace(/(?<![\\$\d])\$(?!\s)([^\n$]+?)(?<!\s)\$(?!\d)/g, (m,t) => put(t,false));
   }).join('');
-  let html = marked.parse(md, { gfm:true, breaks:false });
+  let html = marked.parse(md, { gfm:true, breaks:true });
   return html.replace(/@@MATH(\d+)@@/g, (m, i) => {
     const { tex, display } = store[+i];
     try { return katex.renderToString(tex, { displayMode: display, throwOnError:false, output:'html', strict:'ignore' }); }
@@ -963,11 +1123,11 @@ function mdToHtml(md){
 }
 
 /* 마크다운 → 페이지별 HTML (Mermaid는 SVG로 치환) */
-async function renderPagesHtml(cache){
+async function renderPagesHtml(bodies){
   const pages = []; let mid = 0;
   for (let n=1;n<=totalPages;n++){
     const div = document.createElement('div');
-    div.innerHTML = mdToHtml(cache[n] || '');
+    div.innerHTML = mdToHtml(bodies[n-1] || '');
     for (const code of div.querySelectorAll('pre > code.language-mermaid')){
       const pre = code.parentElement, id = 'mm'+(mid++);
       try {
@@ -1052,12 +1212,12 @@ function computePageCuts(stage, Hpx){
 }
 
 /* 페이지 단위로 캡처 → PDF / PNG / ZIP 생성 */
-async function makeOutputsFromPages(pagesHtml){
+async function makeOutputsFromPages(pagesHtml, infos){
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({ unit:'mm', format:'a4', compress:true });
   const M = 12, W = 210-2*M, H = 297-2*M;
   const stage = document.createElement('div'); stage.id = 'stage'; document.body.appendChild(stage);
-  let first = true;
+  let first = true, pdfNo = 0;
   const pageCanvases = [];
   const pagePngBlobs = [];
 
@@ -1067,24 +1227,34 @@ async function makeOutputsFromPages(pagesHtml){
       stage.innerHTML = pagesHtml[i] || '&nbsp;';
       if (document.fonts?.ready) await document.fonts.ready;
       await sleep(60);
+      fitWideMath(stage);
       const Hpx = stage.offsetWidth * H / W;
       const bounds = [...computePageCuts(stage, Hpx), stage.offsetHeight];
       const cv = await html2canvas(stage, { scale:2, backgroundColor:'#fff', logging:false });
-      pageCanvases.push(cv);
-      const pBlob = await canvasToBlob(cv, 'image/png');
-      if (pBlob) pagePngBlobs.push(pBlob);
+      const info = infos?.[i] || {};
 
       const kx = cv.width / stage.offsetWidth;
+      const pxmm = cv.width / W;
       for (let bi=0; bi<bounds.length-1; bi++){
         const y = Math.round(bounds[bi]*kx), yEnd = Math.min(cv.height, Math.round(bounds[bi+1]*kx));
         const h = yEnd - y; if (h <= 2) continue;
-        const part = document.createElement('canvas'); part.width = cv.width; part.height = h;
-        const ctx = part.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0,0,part.width,h);
-        ctx.drawImage(cv, 0, y, cv.width, h, 0, 0, cv.width, h);
+        pdfNo++;
+        const deco = pageDeco(info, i, pdfNo);
+        // A4 한 장 크기의 캔버스에 본문 조각 + 머리글/바닥글을 함께 그림
+        const full = document.createElement('canvas');
+        full.width = Math.round(210*pxmm); full.height = Math.round(297*pxmm);
+        const ctx = full.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0,0,full.width,full.height);
+        ctx.drawImage(cv, 0, y, cv.width, h, Math.round(M*pxmm), Math.round(M*pxmm), cv.width, h);
+        if (hasDeco(deco)) drawDeco(ctx, full.width, M*pxmm, 6.5*pxmm, full.height - 6.5*pxmm, 2.9*pxmm, deco);
         if (!first) pdf.addPage(); first = false;
-        pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', M, M, W, h*W/cv.width);
-        part.width = part.height = 0;
+        pdf.addImage(full.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+        full.width = full.height = 0;
       }
+
+      const outCv = decorateCanvas(cv, pageDeco(info, i, i+1));
+      pageCanvases.push(outCv);
+      const pBlob = await canvasToBlob(outCv, 'image/png');
+      if (pBlob) pagePngBlobs.push(pBlob);
       await sleep(0);
     }
 
@@ -1147,13 +1317,28 @@ function updateExportFormatUI(){
 $('exportFormat').onchange = updateExportFormatUI;
 
 async function buildAndPrint(cache){   // (이름 유지) 인쇄 창 없이 파일만 생성
+  building = true;
   try {
-    const pagesHtml = await renderPagesHtml(cache);
+    const infos = preparePages(cache);
+    const pagesHtml = await renderPagesHtml(infos.map(p => p.body));
     lastPagesHtml = pagesHtml;
-    const mdAll = Array.from({length: totalPages}, (_,i) => cache[i+1]||'').join('\n\n---\n\n');
+    const decos = infos.map((p, i) => pageDeco(p, i, i + 1));
+    const mdAll = infos.map((p, i) => {
+      const d = decos[i];
+      const head = d.header ? `*${d.header}*\n\n` : '';
+      const foot = [d.footer ? `*${d.footer}*` : '', d.num ? `— ${d.num} —` : ''].filter(Boolean).join(' · ');
+      return head + p.body + (foot ? `\n\n${foot}` : '');
+    }).join('\n\n---\n\n');
     const title = baseName().replace(/[<>&]/g,'');
-    const htmlDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"><style>${PRINT_CSS}</style></head><body>${pagesHtml.map(h=>`<section class="page">${h}</section>`).join('')}</body></html>`;
-    const { pdfBlob, pngBlob, zipBlob } = await makeOutputsFromPages(pagesHtml);
+    const esc = s => String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+    const sections = pagesHtml.map((h, i) => {
+      const d = decos[i];
+      const hd = d.header ? `<div class="pg-h">${esc(d.header)}</div>` : '';
+      const ft = (d.footer || d.num) ? `<div class="pg-f"><span>${esc(d.footer)}</span><span>${esc(d.num)}</span></div>` : '';
+      return `<section class="page">${hd}${h}${ft}</section>`;
+    }).join('');
+    const htmlDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"><style>${PRINT_CSS}</style></head><body>${sections}</body></html>`;
+    const { pdfBlob, pngBlob, zipBlob } = await makeOutputsFromPages(pagesHtml, infos);
     const mdBlob = new Blob([mdAll], { type:'text/markdown;charset=utf-8' });
     const htmlBlob = new Blob([htmlDoc], { type:'text/html;charset=utf-8' });
 
@@ -1189,6 +1374,10 @@ async function buildAndPrint(cache){   // (이름 유지) 인쇄 창 없이 파�
     log('✅ 파일 생성 완료 – 원하는 형식(PDF / PNG 등)을 선택해 다운로드하세요.');
     $('resultCard').scrollIntoView({ behavior:'smooth', block:'nearest' });
   } catch(e){ log('✗ 파일 생성 실패: '+e.message); }
+  finally {
+    building = false;
+    if (rebuildQueued){ rebuildQueued = false; rebuildFromCache(); }
+  }
 }
 function download(kind, ext){
   if (!outUrls[kind]) return;
@@ -1210,6 +1399,5 @@ $('dlPng').onclick  = () => {
 };
 $('dlMd').onclick   = () => { $('exportFormat').value = 'md'; updateExportFormatUI(); download('md','md'); };
 $('dlHtml').onclick = () => { $('exportFormat').value = 'html'; updateExportFormatUI(); download('html','html'); };
-
-
+injectPageOptionUi();
 init();
