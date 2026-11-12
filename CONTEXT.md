@@ -1,7 +1,7 @@
 # 📄 PDF Vectorizer 컨텍스트 가이드 (CONTEXT.md)
 
 이 문서는 프로젝트의 **공용 기록 보관소(공유 두뇌)** 입니다. 아키텍처, 파일 역할, 핵심 함수 위치, 절대 훼손되면 안 되는 **불변 규칙**, 배포/테스트 방법, 결정 이력과 알려진 한계를 담습니다.
-코드를 바꾸면 이 문서의 관련 절도 **같은 작업 안에서** 함께 고치세요. (마지막 전면 검토: 2026-11-11 v1.5.3, 코드와 대조 완료)
+코드를 바꾸면 이 문서의 관련 절도 **같은 작업 안에서** 함께 고치세요. (마지막 전면 검토: 2026-11-12, 코드와 대조 완료)
 
 ---
 
@@ -36,7 +36,7 @@ pdf-vectorizer/
 
 ### 각 파일의 역할
 1. **`index.html`**: UI 마크업(API 키 입력 `#apiKeyInput`, 상태 배지 `#apiStatusBadge`, 모델 드롭다운 `#modelSelect`, 병렬 배수 `#concurrencySelect`, 쪽 번호 및 머리글/바닥글 옵션 `#optPgNum`/`#optPgHeader`/`#optPgFooter`, 드롭존, 4칸 정보 박스, 진행 카드, 결과/내보내기 카드, 숨겨진 스킨 스위처 버튼 `#skinSecretBtn`, 스킨 선택 모달 `#skinModal`). CDN 로드: PDF.js 3.11.174, Marked, Mermaid 10, KaTeX 0.16, html2canvas, jsPDF, JSZip.
-2. **`style.css`**: 컬러 변수(`:root`), 기본 옵시디언 다크 테마, 사이버펑크 2077 네온 펑크 테마(`[data-theme="cyberpunk"]`), Google AI Studio 코스믹 플로우 테마(`[data-theme="gemini"]`), `.grid4`/`.box`, `.gemini-wave-card`, `.badge`, `.custom-tooltip`, 스킨 모달 팝업.
+2. **`style.css`**: 컬러 변수(`:root`), 기본 옵시디언 다크 테마, 사이버펑크 2077 네온 펑크 테마(`[data-theme="cyberpunk"]`), Google AI Studio 코스믹 플로우 테마(`[data-theme="gemini"]`), 트와일라잇 뉴모피즘 테마(`[data-theme="twilight"]`), 베타 킨츠기 잉크(`[data-theme="kintsugi"]`), 베타 스텔라 리베리(`[data-theme="stellar"]`), `.grid4`/`.box`, `.gemini-wave-card`, `.badge`, `.custom-tooltip`, 스킨 모달 팝업.
 3. **`app.js`**: 아래 2절 표 참고.
 
 ---
@@ -60,7 +60,7 @@ pdf-vectorizer/
 | **Markdown → HTML** | `mdToHtml(md)`, `renderPagesHtml(bodies)`, `fitWideMath(root)` | 수식 보호(`@@MATH n@@`) → marked(`breaks:true`) → KaTeX 치환, Mermaid→SVG, 본문보다 넓은 블록 수식은 글자 축소 |
 | **A4 분할 & 결과 생성** | `buildAndPrint(cache)`, `computePageCuts(stage, Hpx)`, `makeOutputsFromPages(pagesHtml, infos)` | 페이지 경계 계산, 5종 포맷 Blob 생성 (이름은 레거시, **인쇄 창은 띄우지 않음**). PDF는 A4 캔버스에 본문 조각+머리글/바닥글을 합성 |
 | **다운로드** | `download(kind, ext)`, `updateExportFormatUI()` | PDF / PNG / PNG-ZIP / HTML / MD |
-| **비주얼 스킨 & 테마** | `VALID_SKINS`, `applyTheme(skin)`, `initSkinSwitcher()`, `startGeminiBgFlow()`, `stopGeminiBgFlow()` | 3종 스킨 전환 및 `localStorage` 영구 유지. 사이버펑크 모드 시 오실로스코프 파형 전환, Gemini 모드 시 좌우 앰비언트 유체 오로라 리본 캔버스 가동 |
+| **비주얼 스킨 & 테마** | `VALID_SKINS`, `applyTheme(skin)`, `initSkinSwitcher()`, `startBgEffect(skin)`, `stopBgEffects()`, `startGeminiBgFlow()`, `stopGeminiBgFlow()`, `startKintsugiBg()`, `startStellarBg()` | 6종 스킨 전환(`default`/`cyberpunk`/`gemini`/`twilight`/`kintsugi`/`stellar`) 및 `localStorage` 영구 유지. 테마별 배경 캔버스(`#kintsugiBgCanvas`, `#stellarBgCanvas`, `#geminiFlowCanvasLeft/Right`) 및 `geminiWaveCanvas` 전용 파형 자동 전환 |
 
 저장소 키: `localStorage['pdfvec.settings.v2']`(키·모델·병렬 배수·`pgNum`/`pgHeader`/`pgFooter` 페이지 서식 옵션, `skin` 테마), `sessionStorage['pdfvec:<파일명>:<크기>:<수정시각>']`(페이지별 마크다운 캐시 = 이어하기).
 
@@ -152,7 +152,7 @@ pdf-vectorizer/
 - `sessionStorage` 캐시 + **[이어하기]**(중단/실패 후 이어서), 잔액 소진 등으로 중단 가능.
 - 응답 `usage`(prompt/completion tokens) 기반 실측 집계. 없으면 글자 수로 역산하고 로그에 `(추정)` 표기.
 - 429 백오프, 즉각 중단, 절전 방지, 지능형 분할, 5종 내보내기, 등급 배지/툴팁.
-- **비주얼 스킨 시스템 (v1.5.3)**: 헤더 우측 숨겨진 버튼(`✦`), 로고 클릭, `Alt+S` 단축키로 토글되는 테마 스위처. 기본 옵시디언 다크, 사이버펑크 2077 네온 펑크(`data-theme="cyberpunk"`), Google AI Studio 코스믹 플로우(`data-theme="gemini"`) 3종 스킨 지원 및 `localStorage` 영구 보존.
+- **비주얼 스킨 시스템**: 헤더 우측 숨겨진 버튼(`✦`, `#skinSecretBtn`)으로만 토글되는 비밀 테마 스위처(2열 그리드 모달). 기본 옵시디언 다크, 사이버펑크 2077 네온 펑크(`cyberpunk`), Google AI Studio 코스믹 플로우(`gemini`), 트와일라잇 뉴모피즘(`twilight`), 베타 킨츠기 잉크(`kintsugi`), 베타 스텔라 리베리(`stellar`) 6종 스킨 지원 및 `localStorage` 영구 보존.
 - **아키텍처 경량화 (v1.5.3)**: 웹 배포에 불필요한 과거 로컬 백엔드/런처/스크립트를 `legacy/` 디렉토리로 완전 분리.
 
 ---
@@ -186,7 +186,7 @@ pdf-vectorizer/
 9. (2026-11-10) 머리글/쪽 번호가 본문 중간에섞이거나 배치·표·수식이 깨지는 문제 대응: 쪽 번호/머리글/바닥글을 본문과 분리(`PAGE` 메타 줄 + 후처리)하고 사용자 옵션으로 기록, 프롬프트에 줄바꿈·정렬·열 나열 표·여러 줄 수식 규칙 추가. 기존 "쪽 번호 생략" 규칙은 "옵션에 따라 기록"으로 대체. 옵션 UI는 `index.html` 상단 설정 카드에 `#optPgNum`, `#optPgHeader`, `#optPgFooter`로 정식 마크업되어 페이지 접속 즉시 설정 가능.
 10. (2026-11-11, v1.5.0~v1.5.3) 파일 구조 정리 & 비주얼 스킨 시스템 구축:
     - 과거 로컬 Flask 서버(`app.py`)/PyWebView GUI 런처(`gui_launcher.py`)/로컬 셸 스크립트/백업 등 불필요한 레거시 파일들을 `legacy/` 디렉토리로 격리 분류하여 웹 배포 루트를 `index.html`, `style.css`, `app.js` 중심으로 경량화 및 청정화.
-    - 숨겨진 트리거(헤더 우측 `✦` 버튼 `#skinSecretBtn`, 로고 클릭 `#logoTitle`, `Alt+S` 단축키)로 활성화되는 스킨 변경 모달 UI(`#skinModal`) 구현 및 `localStorage` 영구 보존.
+    - 숨겨진 트리거(헤더 우측 `✦` 버튼 `#skinSecretBtn` — v1.5.0 초기엔 로고 클릭·`Alt+S` 포함이었으나 v1.5.5에서 비밀성 유지를 위해 제거)로 활성화되는 스킨 변경 모달 UI(`#skinModal`) 구현 및 `localStorage` 영구 보존.
     - **사이버펑크 2077 테마 (`data-theme="cyberpunk"`)**:
       - 3D 원근 신스웨이브 격자 바닥 스크롤 애니메이션 + 나이트 시티 마천루 건물 실루엣 + 네온 선셋 태양.
       - 45도 챔퍼(chamfered) 커팅 카드 + `// SYSTEM_NET // V.2077` 테크 라벨 + 사이버 옐로우(`#fcee0a`)/시안(`#00f0ff`)/마젠타(`#ff0055`) 시그니처 배색.
@@ -197,6 +197,16 @@ pdf-vectorizer/
       - (v1.5.3 개선) 튀는 형광 네온과 빠른 색상 회전을 전면 배제하고, Deep Royal Blue ➔ Cosmic Indigo ➔ Sky Ice ➔ Soft Violet의 우아한 톤온톤 조율.
       - 둥근 18px 곡면의 심화 울트라 글래스모피즘(`backdrop-filter: blur(28px)`) + 상단 1.5px의 부드러운 오로라 실크 빔.
       - 딥 코스믹 사파이어 글래스모피즘 캡슐 버튼(0.35 반사광 림) + 부드러운 오로라 에너지 포털 드롭존.
+11. (2026-11-12) 세 번째 커스텀 스킨 **트와일라잇(Twilight)** 신설 (`data-theme="twilight"`):
+    - 화이트(하이라이트), 쿨 그레이(매트 베이스 `#e6e9f0` & 음영), 차콜 블랙(타이포그래피 `#16181d`) 모노크롬 중심의 정교한 양각/음각 뉴모피즘(Soft UI / Tactile Depth).
+    - 애플 디자인 룩의 유려한 곡선(`border-radius: 24px` 스쿼클 카드, 14~20px 둥근 컨트롤)과 이질감 없이 자연스럽게 연결되는 표면 설계.
+    - 강조 버튼, 진행률 바, 드롭존 활성, 정보 수치 등은 블루-바이올렛 스펙트럼(`#4f6ef7` ➔ `#7a61e6`)으로 회색 음각 구간을 부드럽게 채우며, 4번째 웨이브 캔버스(`geminiWaveCanvas`)도 트와일라잇 전용 블루-바이올렛 실크 파형으로 자동 전환.
+12. (2026-11-12, v1.5.5) 베타 스킨 2종 (**킨츠기 잉크** & **스텔라 리베리**) 추가 (`VALID_SKINS` 6종 체제 & 2열 스킨 모달):
+    - **베타 1 · 킨츠기 잉크 (`kintsugi`)**: 매트 블랙 칠기 도자기 표면 위에 깨진 틈을 액체 순금으로 잇는 금계(Kintsugi) 크랙 SVG 맥락과 주색 낙관(`印`) 포인트를 결합. `#kintsugiBgCanvas`가 살아 움직이는 수묵(먹물) 확산 구름과 부유하는 금박 입자를 렌더링하고, `#geminiWaveCanvas`도 수묵 + 용융 금맥 웨이브로 전환.
+    - **베타 2 · 스텔라 리베리 (`stellar`)**: 벨벳 심야 밤하늘 위로 `#stellarBgCanvas`의 반짝이는 4각 별빛·대각선 유성우·파스텔 성운 글로우(`.stellar-nebula-glow`)가 흐르며, 반투명 진주/오팔 광택 글래스 카드와 샴페인 로즈골드-라벤더 그라데이션 UI 및 은하수 웨이브를 제공.
+    - 배경 캔버스 생명주기는 `startBgEffect(skin)` / `stopBgEffects()` 헬퍼로 일원화해 비활성 테마의 `requestAnimationFrame` 루프가 자동 중단되도록 구성.
+13. (2026-11-12, v1.5.5) 스킨 스위처 비밀 트리거 단일화:
+    - 숨겨진 스킨 변경 기능이 너무 쉽게 노출되지 않도록 `#logoTitle` 클릭 핸들러/호버 커서(`cursor:pointer`)와 `Alt+S` 키보드 단축키 및 버튼 `title` 툴팁을 전면 제거하고, 헤더 우측 `✦`(`#skinSecretBtn`) 클릭만으로 모달이 열리도록 정리(`Escape`로 닫기는 유지).
 
 ---
 

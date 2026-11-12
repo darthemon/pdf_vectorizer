@@ -25,15 +25,24 @@
     <div class="gemini-ambient-orb orb-2"></div>
     <div class="gemini-ambient-orb orb-3"></div>
   </div>
+  <!-- 베타 1 · 킨츠기 잉크 전용: 흐르는 수묵 확산과 금박 부유 캔버스 -->
+  <div class="kintsugi-bg-wrap">
+    <canvas id="kintsugiBgCanvas" class="bg-full-canvas"></canvas>
+  </div>
+  <!-- 베타 2 · 스텔라 리베리 전용: 은하수 성운과 유성우 밤하늘 캔버스 -->
+  <div class="stellar-bg-wrap">
+    <canvas id="stellarBgCanvas" class="bg-full-canvas"></canvas>
+    <div class="stellar-nebula-glow"></div>
+  </div>
 </div>
 <header>
   <div class="header-inner">
     <div class="header-left">
-      <span class="logo-title" id="logoTitle" title="비주얼 스킨 변경 (클릭)">PDF Vectorizer</span>
+      <span class="logo-title" id="logoTitle">PDF Vectorizer</span>
       <span class="hint">API 키는 로컬 스토리지에만 저장됩니다.</span>
     </div>
     <div class="header-right">
-      <button id="skinSecretBtn" class="skin-secret-btn" title="🎨 비주얼 스킨 변경 (단축키: Alt+S)" aria-label="스킨 변경">
+      <button id="skinSecretBtn" class="skin-secret-btn" aria-label="스킨 변경">
         <span class="skin-secret-sparkle">✦</span>
       </button>
     </div>
@@ -207,6 +216,54 @@
           <span class="skin-check-badge">✓</span>
         </div>
 
+        <!-- 4. 트와일라잇 (애플 룩 뉴모피즘) -->
+        <div class="skin-option-card" data-skin="twilight" tabindex="0">
+          <div class="skin-preview preview-twilight">
+            <div class="pv-bar"></div>
+            <div class="pv-box"></div>
+          </div>
+          <div class="skin-meta">
+            <div class="skin-meta-top">
+              <span class="skin-title">트와일라잇</span>
+              <span class="skin-tag twilight">TWILIGHT</span>
+            </div>
+            <div class="skin-subtitle">모노크롬 뉴모피즘과 은은한 바이올렛-블루</div>
+          </div>
+          <span class="skin-check-badge">✓</span>
+        </div>
+
+        <!-- 5. 베타 1: 킨츠기 잉크 (실험적 아트 컨셉) -->
+        <div class="skin-option-card" data-skin="kintsugi" tabindex="0">
+          <div class="skin-preview preview-kintsugi">
+            <div class="pv-bar"></div>
+            <div class="pv-box"></div>
+          </div>
+          <div class="skin-meta">
+            <div class="skin-meta-top">
+              <span class="skin-title">킨츠기 잉크</span>
+              <span class="skin-tag kintsugi">BETA · ART</span>
+            </div>
+            <div class="skin-subtitle">균열을 잇는 액체 순금과 흐르는 수묵의 미학</div>
+          </div>
+          <span class="skin-check-badge">✓</span>
+        </div>
+
+        <!-- 6. 베타 2: 스텔라 리베리 (꿈결 같은 유성우 오팔 글래스) -->
+        <div class="skin-option-card" data-skin="stellar" tabindex="0">
+          <div class="skin-preview preview-stellar">
+            <div class="pv-bar"></div>
+            <div class="pv-box"></div>
+          </div>
+          <div class="skin-meta">
+            <div class="skin-meta-top">
+              <span class="skin-title">스텔라 리베리</span>
+              <span class="skin-tag stellar">BETA · DREAM</span>
+            </div>
+            <div class="skin-subtitle">유성우 밤하늘과 샴페인 오팔 진주광택 글래스</div>
+          </div>
+          <span class="skin-check-badge">✓</span>
+        </div>
+
       </div>
     </div>
   </div>
@@ -221,6 +278,6 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="app.js?v=20261111_v153"></script>
+<script src="app.js?v=20261112_v155"></script>
 </body>
 </html>

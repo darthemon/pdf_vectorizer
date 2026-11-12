@@ -366,6 +366,206 @@ function startGeminiWave() {
       return;
     }
 
+    if (state.skin === 'twilight') {
+      // ===== 트와일라잇(Twilight) 애플 뉴모피즘 블루-바이올렛 실크 파형 모드 =====
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+
+      const twLayers = [
+        {
+          c1: 'rgba(84, 104, 231, 0.24)',
+          c2: 'rgba(124, 99, 230, 0.16)',
+          freq: 0.014,
+          mul: 0.9,
+          amp: 4 + geminiIntensity * 18,
+          offset: 0
+        },
+        {
+          c1: 'rgba(124, 99, 230, 0.20)',
+          c2: 'rgba(162, 136, 244, 0.14)',
+          freq: 0.020,
+          mul: 1.15,
+          amp: 3 + geminiIntensity * 14,
+          offset: 2.2
+        },
+        {
+          c1: 'rgba(74, 108, 247, 0.16)',
+          c2: 'rgba(104, 109, 224, 0.12)',
+          freq: 0.025,
+          mul: 0.75,
+          amp: 3 + geminiIntensity * 12,
+          offset: 4.1
+        }
+      ];
+
+      twLayers.forEach(layer => {
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        for (let x = 0; x <= w; x += 4) {
+          const p1 = geminiPhase * layer.mul + layer.offset;
+          const s1 = Math.sin(x * layer.freq + p1);
+          const s2 = Math.sin(x * (layer.freq * 1.5) - p1 * 0.5);
+          const y = cy + (s1 * 0.75 + s2 * 0.25) * layer.amp;
+          ctx.lineTo(x, y);
+        }
+        ctx.lineTo(w, h);
+        ctx.closePath();
+
+        const grad = ctx.createLinearGradient(0, cy - layer.amp, w, cy + layer.amp);
+        grad.addColorStop(0, layer.c1);
+        grad.addColorStop(1, layer.c2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+      });
+
+      // 우아한 바이올렛-블루 실크 스트림 라인
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += 3) {
+        const p = geminiPhase * 1.05;
+        const y = cy + Math.sin(x * 0.017 + p) * (3 + geminiIntensity * 12)
+                      + Math.cos(x * 0.028 - p * 0.65) * (1.5 + geminiIntensity * 6);
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      const twLine = ctx.createLinearGradient(0, 0, w, 0);
+      twLine.addColorStop(0, 'rgba(84, 104, 231, 0.2)');
+      twLine.addColorStop(0.3, 'rgba(84, 104, 231, 0.75)');
+      twLine.addColorStop(0.7, 'rgba(124, 99, 230, 0.8)');
+      twLine.addColorStop(1, 'rgba(155, 114, 207, 0.2)');
+      ctx.strokeStyle = twLine;
+      ctx.lineWidth = 1.4 + geminiIntensity * 1.4;
+      ctx.stroke();
+
+      ctx.restore();
+      return;
+    }
+
+    if (state.skin === 'kintsugi') {
+      ctx.save();
+
+      // 수묵화(Sumi-e) 먹물 구름 레이어
+      const inkWaves = [
+        { color: 'rgba(62, 50, 34, 0.42)', freq: 0.011, amp: 5 + geminiIntensity * 14, speed: 0.65, offset: 0 },
+        { color: 'rgba(32, 26, 19, 0.55)', freq: 0.017, amp: 4 + geminiIntensity * 10, speed: 0.9, offset: 2.1 },
+      ];
+      inkWaves.forEach(iw => {
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        for (let x = 0; x <= w; x += 6) {
+          const y = cy + 4 + Math.sin(x * iw.freq + geminiPhase * iw.speed + iw.offset) * iw.amp
+                           + Math.cos(x * iw.freq * 1.8 - geminiPhase * 0.5) * (iw.amp * 0.45);
+          ctx.lineTo(x, y);
+        }
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        ctx.fillStyle = iw.color;
+        ctx.fill();
+      });
+
+      // 용융 순금 킨츠기 맥락(Vein) 주선
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += 3) {
+        const p = geminiPhase * 0.9;
+        const y = cy + Math.sin(x * 0.016 + p) * (2.5 + geminiIntensity * 13)
+                     + Math.sin(x * 0.043 - p * 1.3) * (1.2 + geminiIntensity * 4);
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      const goldGrad = ctx.createLinearGradient(0, 0, w, 0);
+      goldGrad.addColorStop(0, 'rgba(181, 133, 49, 0.25)');
+      goldGrad.addColorStop(0.25, '#f4d37e');
+      goldGrad.addColorStop(0.55, '#fff4cc');
+      goldGrad.addColorStop(0.85, '#d8a648');
+      goldGrad.addColorStop(1, 'rgba(181, 133, 49, 0.25)');
+      ctx.strokeStyle = goldGrad;
+      ctx.lineWidth = 1.6 + geminiIntensity * 1.8;
+      ctx.shadowColor = 'rgba(244, 211, 126, 0.75)';
+      ctx.shadowBlur = 9;
+      ctx.stroke();
+
+      // 미세 금박 부유 입자
+      ctx.shadowBlur = 0;
+      for (let i = 0; i < 14; i++) {
+        const px = ((i * 73.7 + geminiPhase * (18 + (i % 4) * 5)) % (w + 20)) - 10;
+        const py = cy + Math.sin(geminiPhase * 0.8 + i * 1.7) * (h * 0.34);
+        const alpha = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(geminiPhase * 2.1 + i));
+        ctx.fillStyle = `rgba(255, 232, 165, ${alpha.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(px, py, 0.9 + (i % 2) * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+      return;
+    }
+
+    if (state.skin === 'stellar') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+
+      // 반짝이는 미세 별빛 입자
+      for (let i = 0; i < 22; i++) {
+        const sx = ((i * 59.3) % w);
+        const sy = 6 + ((i * 31.7) % Math.max(12, h - 12));
+        const twinkle = 0.2 + 0.75 * (0.5 + 0.5 * Math.sin(geminiPhase * 2.6 + i * 1.9));
+        ctx.fillStyle = i % 3 === 0
+          ? `rgba(246, 207, 164, ${twinkle.toFixed(2)})`
+          : i % 3 === 1
+            ? `rgba(232, 169, 198, ${twinkle.toFixed(2)})`
+            : `rgba(197, 182, 255, ${twinkle.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 0.8 + (i % 3) * 0.45, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 은하수 오팔 리본 웨이브
+      const ribbons = [
+        { c1: 'rgba(245, 207, 168, 0.34)', c2: 'rgba(231, 164, 196, 0.28)', freq: 0.015, mul: 1.0, amp: 4 + geminiIntensity * 17, offset: 0 },
+        { c1: 'rgba(184, 158, 248, 0.36)', c2: 'rgba(151, 236, 208, 0.22)', freq: 0.021, mul: -0.8, amp: 3 + geminiIntensity * 14, offset: 2.3 },
+      ];
+      ribbons.forEach(r => {
+        const g = ctx.createLinearGradient(0, 0, w, 0);
+        g.addColorStop(0, 'transparent');
+        g.addColorStop(0.25, r.c1);
+        g.addColorStop(0.75, r.c2);
+        g.addColorStop(1, 'transparent');
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        for (let x = 0; x <= w; x += 4) {
+          const p = geminiPhase * r.mul;
+          const y = cy + Math.sin(x * r.freq + p + r.offset) * r.amp
+                       + Math.cos(x * r.freq * 0.55 - p * 0.7) * (r.amp * 0.4);
+          ctx.lineTo(x, y);
+        }
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        ctx.fillStyle = g;
+        ctx.fill();
+      });
+
+      // 샴페인 진주빛 코어 유성 웨이브
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += 3) {
+        const y = cy + Math.sin(x * 0.017 + geminiPhase * 1.1) * (3 + geminiIntensity * 13)
+                     + Math.cos(x * 0.029 - geminiPhase * 0.8) * (1.4 + geminiIntensity * 5);
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      const coreGrad = ctx.createLinearGradient(0, 0, w, 0);
+      coreGrad.addColorStop(0, 'rgba(245, 207, 168, 0.25)');
+      coreGrad.addColorStop(0.35, 'rgba(255, 246, 238, 0.92)');
+      coreGrad.addColorStop(0.7, 'rgba(232, 169, 198, 0.9)');
+      coreGrad.addColorStop(1, 'rgba(184, 158, 248, 0.25)');
+      ctx.strokeStyle = coreGrad;
+      ctx.lineWidth = 1.5 + geminiIntensity * 1.5;
+      ctx.shadowColor = 'rgba(242, 195, 224, 0.75)';
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+
+      ctx.restore();
+      return;
+    }
+
     const layers = [
       {
         c1: 'rgba(66, 133, 244, 0.45)', // Gemini Blue
@@ -1171,11 +1371,32 @@ function initPageOptions(){
 }
 
 /* ---------- 비주얼 스킨 / 테마 관리 ---------- */
-const VALID_SKINS = ['default', 'cyberpunk', 'gemini'];
+const VALID_SKINS = ['default', 'cyberpunk', 'gemini', 'twilight', 'kintsugi', 'stellar'];
 
-/* ---------- Gemini AI Studio 좌우 유체 오로라 플로우 캔버스 애니메이션 ---------- */
+/* ---------- 테마별 전담 배경 캔버스 애니메이션 (Gemini / Kintsugi / Stellar) ---------- */
 let geminiFlowAnimId = null;
 let geminiFlowPhase = 0;
+let kintsugiAnimId = null;
+let stellarAnimId = null;
+
+function stopGeminiBgFlow(){
+  if (geminiFlowAnimId){
+    cancelAnimationFrame(geminiFlowAnimId);
+    geminiFlowAnimId = null;
+  }
+}
+
+function stopBgEffects(){
+  stopGeminiBgFlow();
+  if (kintsugiAnimId){
+    cancelAnimationFrame(kintsugiAnimId);
+    kintsugiAnimId = null;
+  }
+  if (stellarAnimId){
+    cancelAnimationFrame(stellarAnimId);
+    stellarAnimId = null;
+  }
+}
 
 function startGeminiBgFlow(){
   if (geminiFlowAnimId) return;
@@ -1283,11 +1504,245 @@ function startGeminiBgFlow(){
   geminiFlowAnimId = requestAnimationFrame(renderFlow);
 }
 
-function stopGeminiBgFlow(){
-  if (geminiFlowAnimId){
-    cancelAnimationFrame(geminiFlowAnimId);
-    geminiFlowAnimId = null;
+function startKintsugiBg(){
+  if (kintsugiAnimId) return;
+  const cv = $('kintsugiBgCanvas');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+
+  // 수묵(먹물) 확산 구름 + 금박 입자 시드
+  const inkBlobs = Array.from({ length: 6 }, (_, i) => ({
+    bx: (0.14 + (i % 3) * 0.36),
+    by: (0.22 + Math.floor(i / 3) * 0.52),
+    rFrac: 0.24 + (i % 3) * 0.08,
+    speedX: 0.14 + (i % 2) * 0.07,
+    speedY: 0.11 + (i % 3) * 0.05,
+    phase: i * 1.35,
+    tint: i % 2 === 0 ? 'rgba(66, 54, 34, 0.26)' : 'rgba(28, 34, 42, 0.34)',
+  }));
+
+  const goldFlecks = Array.from({ length: 42 }, (_, i) => ({
+    x: ((i * 97.3) % 100) / 100,
+    y: ((i * 53.1) % 100) / 100,
+    vy: 0.00018 + (i % 5) * 0.00006,
+    vx: (((i % 3) - 1) * 0.00009),
+    size: 0.9 + (i % 4) * 0.55,
+    phase: i * 0.85,
+  }));
+
+  let t = 0;
+  function render(){
+    if (state.skin !== 'kintsugi'){
+      stopBgEffects();
+      return;
+    }
+    kintsugiAnimId = requestAnimationFrame(render);
+    t += 0.008;
+
+    const W = window.innerWidth || 1280;
+    const H = window.innerHeight || 800;
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)){
+      cv.width = Math.round(W * dpr);
+      cv.height = Math.round(H * dpr);
+    }
+    ctx.resetTransform();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+
+    // 1. 유영하는 수묵 확산 구름
+    ctx.save();
+    const baseDim = Math.max(W, H);
+    inkBlobs.forEach(b => {
+      const cx = (b.bx + Math.sin(t * b.speedX + b.phase) * 0.09) * W;
+      const cy = (b.by + Math.cos(t * b.speedY + b.phase * 1.2) * 0.08) * H;
+      const rad = b.rFrac * baseDim * (0.94 + 0.08 * Math.sin(t * 0.7 + b.phase));
+      const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+      rg.addColorStop(0, b.tint);
+      rg.addColorStop(0.55, 'rgba(30, 25, 18, 0.14)');
+      rg.addColorStop(1, 'rgba(11, 10, 9, 0)');
+      ctx.fillStyle = rg;
+      ctx.beginPath();
+      ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
+
+    // 2. 미세하게 뻗는 액체 순금 균열 베인 실루엣
+    ctx.save();
+    ctx.strokeStyle = 'rgba(229, 190, 110, 0.13)';
+    ctx.lineWidth = 1.1;
+    for (let k = 0; k < 2; k++){
+      ctx.beginPath();
+      const startY = k === 0 ? H * 0.18 : H * 0.78;
+      ctx.moveTo(0, startY);
+      for (let x = 0; x <= W; x += 64){
+        const wave = Math.sin(x * 0.004 + t * 0.4 + k * 2.5) * 28
+                   + Math.cos(x * 0.011 - k) * 14;
+        ctx.lineTo(x, startY + (k === 0 ? x * 0.08 : -x * 0.06) + wave);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 3. 떠오르는 금박 입자
+    ctx.save();
+    goldFlecks.forEach(f => {
+      f.y -= f.vy;
+      f.x += f.vx + Math.sin(t + f.phase) * 0.00008;
+      if (f.y < -0.02) f.y = 1.02;
+      if (f.x < 0) f.x = 1;
+      if (f.x > 1) f.x = 0;
+      const gleam = 0.25 + 0.65 * (0.5 + 0.5 * Math.sin(t * 2.4 + f.phase));
+      ctx.fillStyle = `rgba(246, 217, 138, ${gleam.toFixed(2)})`;
+      ctx.shadowColor = 'rgba(246, 217, 138, 0.6)';
+      ctx.shadowBlur = f.size > 1.8 ? 8 : 3;
+      ctx.beginPath();
+      ctx.arc(f.x * W, f.y * H, f.size, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
   }
+
+  kintsugiAnimId = requestAnimationFrame(render);
+}
+
+function startStellarBg(){
+  if (stellarAnimId) return;
+  const cv = $('stellarBgCanvas');
+  if (!cv) return;
+  const ctx = cv.getContext('2d');
+
+  const hues = ['255,250,245', '246,207,164', '238,182,212', '198,184,255'];
+  const stars = Array.from({ length: 135 }, (_, i) => ({
+    x: Math.random(),
+    y: Math.random(),
+    r: i < 14 ? 1.8 + Math.random() * 1.1 : 0.6 + Math.random() * 1.2,
+    glint: i < 14,
+    phase: Math.random() * Math.PI * 2,
+    speed: 0.8 + Math.random() * 1.8,
+    drift: 0.00003 + Math.random() * 0.00005,
+    rgb: hues[i % hues.length],
+  }));
+
+  const shootingStars = [];
+  function spawnMeteor(){
+    shootingStars.push({
+      x: 0.25 + Math.random() * 0.72,
+      y: Math.random() * 0.35,
+      vx: -(0.0045 + Math.random() * 0.0035),
+      vy: 0.0028 + Math.random() * 0.0022,
+      life: 0,
+      maxLife: 55 + Math.random() * 35,
+      len: 110 + Math.random() * 90,
+      rgb: Math.random() > 0.45 ? '255,235,215' : '232,190,255',
+    });
+  }
+  spawnMeteor(); // 진입 즉시 1개의 유성이 스쳐 지나가도록 연출
+
+  let t = 0;
+  let meteorCooldown = 110;
+  function render(){
+    if (state.skin !== 'stellar'){
+      stopBgEffects();
+      return;
+    }
+    stellarAnimId = requestAnimationFrame(render);
+    t += 0.016;
+
+    const W = window.innerWidth || 1280;
+    const H = window.innerHeight || 800;
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)){
+      cv.width = Math.round(W * dpr);
+      cv.height = Math.round(H * dpr);
+    }
+    ctx.resetTransform();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+
+    // 1. 별빛 & 4각 다이아몬드 성광
+    ctx.save();
+    stars.forEach(s => {
+      s.y -= s.drift;
+      if (s.y < -0.01) s.y = 1.01;
+      const sx = s.x * W;
+      const sy = s.y * H;
+      const alpha = 0.25 + 0.7 * (0.5 + 0.5 * Math.sin(t * s.speed + s.phase));
+
+      ctx.fillStyle = `rgba(${s.rgb}, ${alpha.toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, s.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (s.glint && alpha > 0.62){
+        const arm = s.r * (3.2 + alpha * 2.5);
+        ctx.strokeStyle = `rgba(${s.rgb}, ${(alpha * 0.55).toFixed(2)})`;
+        ctx.lineWidth = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(sx - arm, sy); ctx.lineTo(sx + arm, sy);
+        ctx.moveTo(sx, sy - arm); ctx.lineTo(sx, sy + arm);
+        ctx.stroke();
+      }
+    });
+    ctx.restore();
+
+    // 2. 대각선 유성우(별똥별)
+    meteorCooldown -= 1;
+    if (meteorCooldown <= 0){
+      spawnMeteor();
+      meteorCooldown = 110 + Math.floor(Math.random() * 120);
+    }
+
+    ctx.save();
+    for (let i = shootingStars.length - 1; i >= 0; i--){
+      const m = shootingStars[i];
+      m.x += m.vx;
+      m.y += m.vy;
+      m.life += 1;
+      if (m.life >= m.maxLife){
+        shootingStars.splice(i, 1);
+        continue;
+      }
+      const prog = m.life / m.maxLife;
+      const fade = prog < 0.2 ? prog / 0.2 : Math.max(0, 1 - (prog - 0.2) / 0.8);
+      const hx = m.x * W;
+      const hy = m.y * H;
+      const norm = Math.hypot(m.vx * W, m.vy * H) || 1;
+      const tx = hx - (m.vx * W / norm) * m.len;
+      const ty = hy - (m.vy * H / norm) * m.len;
+
+      const mg = ctx.createLinearGradient(hx, hy, tx, ty);
+      mg.addColorStop(0, `rgba(255, 250, 245, ${(fade * 0.95).toFixed(2)})`);
+      mg.addColorStop(0.35, `rgba(${m.rgb}, ${(fade * 0.55).toFixed(2)})`);
+      mg.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+      ctx.strokeStyle = mg;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(hx, hy);
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+
+      ctx.fillStyle = `rgba(255, 252, 248, ${fade.toFixed(2)})`;
+      ctx.shadowColor = `rgba(${m.rgb}, 0.8)`;
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(hx, hy, 1.9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    ctx.restore();
+  }
+
+  stellarAnimId = requestAnimationFrame(render);
+}
+
+function startBgEffect(skin){
+  stopBgEffects();
+  if (skin === 'gemini') startGeminiBgFlow();
+  else if (skin === 'kintsugi') startKintsugiBg();
+  else if (skin === 'stellar') startStellarBg();
 }
 
 function applyTheme(skinName){
@@ -1295,15 +1750,10 @@ function applyTheme(skinName){
   state.skin = skin;
   if (skin === 'default') {
     document.documentElement.removeAttribute('data-theme');
-    stopGeminiBgFlow();
   } else {
     document.documentElement.setAttribute('data-theme', skin);
-    if (skin === 'gemini') {
-      startGeminiBgFlow();
-    } else {
-      stopGeminiBgFlow();
-    }
   }
+  startBgEffect(skin);
   document.querySelectorAll('.skin-option-card').forEach(card => {
     card.classList.toggle('active', card.dataset.skin === skin);
   });
@@ -1313,7 +1763,6 @@ function applyTheme(skinName){
 function initSkinSwitcher(){
   const modal = $('skinModal');
   const btnSecret = $('skinSecretBtn');
-  const logo = $('logoTitle');
   const btnClose = $('skinModalClose');
   const backdrop = $('skinModalBackdrop');
   if (!modal) return;
@@ -1327,16 +1776,12 @@ function initSkinSwitcher(){
   const toggleModal = () => modal.classList.contains('hidden') ? openModal() : closeModal();
 
   if (btnSecret) btnSecret.onclick = toggleModal;
-  if (logo) logo.onclick = toggleModal;
   if (btnClose) btnClose.onclick = closeModal;
   if (backdrop) backdrop.onclick = closeModal;
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
       closeModal();
-    } else if (e.altKey && (e.key === 's' || e.key === 'S')) {
-      e.preventDefault();
-      toggleModal();
     }
   });
 
