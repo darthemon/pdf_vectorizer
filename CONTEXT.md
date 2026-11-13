@@ -60,7 +60,7 @@ pdf-vectorizer/
 | **Markdown → HTML** | `mdToHtml(md)`, `renderPagesHtml(bodies)`, `fitWideMath(root)` | 수식 보호(`@@MATH n@@`) → marked(`breaks:true`) → KaTeX 치환, Mermaid→SVG, 본문보다 넓은 블록 수식은 글자 축소 |
 | **A4 분할 & 결과 생성** | `buildAndPrint(cache)`, `computePageCuts(stage, Hpx)`, `makeOutputsFromPages(pagesHtml, infos)` | 페이지 경계 계산, 5종 포맷 Blob 생성 (이름은 레거시, **인쇄 창은 띄우지 않음**). PDF는 A4 캔버스에 본문 조각+머리글/바닥글을 합성 |
 | **다운로드** | `download(kind, ext)`, `updateExportFormatUI()` | PDF / PNG / PNG-ZIP / HTML / MD |
-| **비주얼 스킨 & 테마** | `VALID_SKINS`, `applyTheme(skin)`, `initSkinSwitcher()`, `startBgEffect(skin)`, `stopBgEffects()`, `startGeminiBgFlow()`, `stopGeminiBgFlow()`, `startKintsugiBg()`, `startStellarBg()` | 6종 스킨 전환(`default`/`cyberpunk`/`gemini`/`twilight`/`kintsugi`/`stellar`) 및 `localStorage` 영구 유지. 테마별 배경 캔버스(`#kintsugiBgCanvas`, `#stellarBgCanvas`, `#geminiFlowCanvasLeft/Right`) 및 `geminiWaveCanvas` 전용 파형 자동 전환 |
+| **비주얼 스킨 & 테마** | `VALID_SKINS`, `applyTheme(skin)`, `initSkinSwitcher()`, `initSkinInteractiveBridge()`, `triggerThemeImpulse(...)`, `startBgEffect(skin)`, `stopBgEffects()`, `startGeminiBgFlow()`, `stopGeminiBgFlow()`, `startKintsugiBg()`, `startStellarBg()`, `createUrushiPattern(...)`, `buildKintsugiFractures(...)`, `drawFourPointStar(...)` | 6종 스킨 전환(`default`/`cyberpunk`/`gemini`/`twilight`/`kintsugi`/`stellar`) 및 `localStorage` 영구 유지. 테마별 배경 캔버스(`#kintsugiBgCanvas`, `#stellarBgCanvas`, `#geminiFlowCanvasLeft/Right`), 커서 기반 카드 반사광/임펄스 브리지, `geminiWaveCanvas` 전용 파형 자동 전환 |
 
 저장소 키: `localStorage['pdfvec.settings.v2']`(키·모델·병렬 배수·`pgNum`/`pgHeader`/`pgFooter` 페이지 서식 옵션, `skin` 테마), `sessionStorage['pdfvec:<파일명>:<크기>:<수정시각>']`(페이지별 마크다운 캐시 = 이어하기).
 
@@ -202,11 +202,19 @@ pdf-vectorizer/
     - 애플 디자인 룩의 유려한 곡선(`border-radius: 24px` 스쿼클 카드, 14~20px 둥근 컨트롤)과 이질감 없이 자연스럽게 연결되는 표면 설계.
     - 강조 버튼, 진행률 바, 드롭존 활성, 정보 수치 등은 블루-바이올렛 스펙트럼(`#4f6ef7` ➔ `#7a61e6`)으로 회색 음각 구간을 부드럽게 채우며, 4번째 웨이브 캔버스(`geminiWaveCanvas`)도 트와일라잇 전용 블루-바이올렛 실크 파형으로 자동 전환.
 12. (2026-11-12, v1.5.5) 베타 스킨 2종 (**킨츠기 잉크** & **스텔라 리베리**) 추가 (`VALID_SKINS` 6종 체제 & 2열 스킨 모달):
-    - **베타 1 · 킨츠기 잉크 (`kintsugi`)**: 매트 블랙 칠기 도자기 표면 위에 깨진 틈을 액체 순금으로 잇는 금계(Kintsugi) 크랙 SVG 맥락과 주색 낙관(`印`) 포인트를 결합. `#kintsugiBgCanvas`가 살아 움직이는 수묵(먹물) 확산 구름과 부유하는 금박 입자를 렌더링하고, `#geminiWaveCanvas`도 수묵 + 용융 금맥 웨이브로 전환.
-    - **베타 2 · 스텔라 리베리 (`stellar`)**: 벨벳 심야 밤하늘 위로 `#stellarBgCanvas`의 반짝이는 4각 별빛·대각선 유성우·파스텔 성운 글로우(`.stellar-nebula-glow`)가 흐르며, 반투명 진주/오팔 광택 글래스 카드와 샴페인 로즈골드-라벤더 그라데이션 UI 및 은하수 웨이브를 제공.
+    - **베타 1 · 킨츠기 잉크 (`kintsugi`)**: 매트 블랙 칠기 도자기 표면과 금계(Kintsugi) 맥락, 주색 낙관(`印`), 수묵/금박 캔버스 및 용융 금맥 웨이브 최초 도입.
+    - **베타 2 · 스텔라 리베리 (`stellar`)**: 밤하늘 별빛·유성우·파스텔 성운 글로우(`.stellar-nebula-glow`), 오팔 글래스모피즘 및 은하수 웨이브 최초 도입.
     - 배경 캔버스 생명주기는 `startBgEffect(skin)` / `stopBgEffects()` 헬퍼로 일원화해 비활성 테마의 `requestAnimationFrame` 루프가 자동 중단되도록 구성.
 13. (2026-11-12, v1.5.5) 스킨 스위처 비밀 트리거 단일화:
     - 숨겨진 스킨 변경 기능이 너무 쉽게 노출되지 않도록 `#logoTitle` 클릭 핸들러/호버 커서(`cursor:pointer`)와 `Alt+S` 키보드 단축키 및 버튼 `title` 툴팁을 전면 제거하고, 헤더 우측 `✦`(`#skinSecretBtn`) 클릭만으로 모달이 열리도록 정리(`Escape`로 닫기는 유지).
+14. (2026-11-13, v1.5.6) 베타 스킨 2종 (**킨츠기 잉크** & **스텔라 리베리**) 전면 고도화:
+    - **공통 인터랙티브 브리지 (`initSkinInteractiveBridge` / `triggerThemeImpulse`)**: 활성 스킨이 `kintsugi` 또는 `stellar`일 때만 커서 위치(`--card-mx`/`--card-my`/`--card-op`)로 카드 1px 마스크 보더·표면 광택을 정밀 조율하고, 클릭/파일 분석/변환 완료 시 캔버스 반응 파문을 전달(`prefers-reduced-motion` 및 백그라운드 탭 절전 대응 포함).
+    - **킨츠기 잉크 (`kintsugi`) 고도화**:
+      - 늘어나던 정적 카드 SVG 균열과 `.hint` 옆 낙관 텍스트를 제거하고, `.logo-title::after` 전각 주색 낙관(`印`), 우루시 칠기 브러시 결 오프스크린 타일(`createUrushiPattern`), 결정론적 프랙탈 균열망(`buildKintsugiFractures`)을 도입.
+      - 커서를 따라오는 촛불 스페큘러 반사광과 균열 분기점을 타고 양방향으로 흘러 퍼지는 용융 순금 모세관 펄스, 다중 엽상 수묵 농담, 3D 회전 비등방성 금박 편(Kinpaku)을 구현하고 `#geminiWaveCanvas` 역시 한지 실선·수묵 비백·분기 금맥 파형으로 고도화.
+    - **스텔라 리베리 (`stellar`) 고도화**:
+      - `#stellarBgCanvas`를 성운 글로우(`.stellar-nebula-glow`) 상위 레이어(`z-index: 1`)로 정리하고, 3층 시차 별자리(7×4 격자 분산 앵커 별)·회전하는 천구 성도 아스트롤라베 호·부드러운 오목 4각 회절 성광(`drawFourPointStar`)·곡선 궤도 유성우와 이온화 별가루 잔상을 구현.
+      - **성좌 필라멘트 직조(Constellation Weaver)**: 커서 주변 별들이 깨어나 샴페인-라벤더 필라멘트로 스스로 이어지고, 가장 가까운 별에 천체 레티클 호가 회전하며, 카드는 자개(Nacre) 진주광택 마스크 보더 리프랙션을 적용. `#geminiWaveCanvas`도 공전 하모닉 궤도 실선과 성광 다이아몬드 파형으로 개편.
 
 ---
 

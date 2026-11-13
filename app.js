@@ -243,6 +243,65 @@ const PROVIDERS = {
 };
 let activeBaseUrl = '', activeProvider = '', detectSeq = 0;
 
+/* ---------- 테마 비주얼 공용 그래픽·포인터 브리지 ---------- */
+const skinPtr = { x: 0.5, y: 0.35, sx: 0.5, sy: 0.35, active: false, lastMoved: 0 };
+const kintsugiImpulses = [];
+const stellarImpulses = [];
+const prefersReducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+const smoothstep = (e0, e1, x) => {
+  const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0 || 1)));
+  return t * t * (3 - 2 * t);
+};
+function createSeededRng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+/** 4각 오목 회절 성광(Optical diffraction star flare) 렌더러 */
+function drawFourPointStar(ctx, x, y, outerR, innerRatio, alpha, rgb) {
+  if (alpha <= 0.01) return;
+  const r = outerR;
+  const c = r * innerRatio;
+  if (r >= 2.6) {
+    const aura = ctx.createRadialGradient(x, y, 0, x, y, r * 1.45);
+    aura.addColorStop(0, `rgba(${rgb}, ${(alpha * 0.42).toFixed(3)})`);
+    aura.addColorStop(0.45, `rgba(${rgb}, ${(alpha * 0.12).toFixed(3)})`);
+    aura.addColorStop(1, `rgba(${rgb}, 0)`);
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 1.45, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = `rgba(${rgb}, ${Math.min(1, alpha).toFixed(3)})`;
+  ctx.beginPath();
+  ctx.moveTo(x, y - r);
+  ctx.quadraticCurveTo(x + c, y - c, x + r, y);
+  ctx.quadraticCurveTo(x + c, y + c, x, y + r);
+  ctx.quadraticCurveTo(x - c, y + c, x - r, y);
+  ctx.quadraticCurveTo(x - c, y - c, x, y - r);
+  ctx.closePath();
+  ctx.fill();
+}
+function triggerThemeImpulse(clientX, clientY) {
+  if (prefersReducedMotion()) return;
+  const w = Math.max(1, window.innerWidth || 1280);
+  const h = Math.max(1, window.innerHeight || 800);
+  const nx = clientX != null ? Math.max(0, Math.min(1, clientX / w)) : 0.5;
+  const ny = clientY != null ? Math.max(0, Math.min(1, clientY / h)) : 0.42;
+  const item = { nx, ny, birth: performance.now() };
+  if (state.skin === 'kintsugi') {
+    kintsugiImpulses.push(item);
+    if (kintsugiImpulses.length > 6) kintsugiImpulses.shift();
+  } else if (state.skin === 'stellar') {
+    stellarImpulses.push(item);
+    if (stellarImpulses.length > 6) stellarImpulses.shift();
+  }
+}
+
 /* ---------- Gemini 오로라 웨이브 애니메이션 ---------- */
 let geminiAnimId = null;
 let geminiIntensity = 0.12;       // 0.12 (idle/done) ~ 1.0 (busy max)
@@ -265,7 +324,7 @@ function startGeminiWave() {
 
   function render() {
     geminiAnimId = requestAnimationFrame(render);
-    if (!canvas.offsetParent) return;
+    if (document.hidden || !canvas.offsetParent) return;
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const rect = canvas.getBoundingClientRect();
@@ -443,17 +502,25 @@ function startGeminiWave() {
     if (state.skin === 'kintsugi') {
       ctx.save();
 
-      // 수묵화(Sumi-e) 먹물 구름 레이어
+      // 1. 미세 한지(Washi) 수평 안내 실선
+      ctx.strokeStyle = 'rgba(219, 179, 98, 0.12)';
+      ctx.lineWidth = 0.75;
+      ctx.beginPath();
+      ctx.moveTo(0, cy);
+      ctx.lineTo(w, cy);
+      ctx.stroke();
+
+      // 2. 수묵 비백(飛白) 먹물 농담 레이어
       const inkWaves = [
-        { color: 'rgba(62, 50, 34, 0.42)', freq: 0.011, amp: 5 + geminiIntensity * 14, speed: 0.65, offset: 0 },
-        { color: 'rgba(32, 26, 19, 0.55)', freq: 0.017, amp: 4 + geminiIntensity * 10, speed: 0.9, offset: 2.1 },
+        { color: 'rgba(56, 44, 28, 0.44)', freq: 0.011, amp: 5 + geminiIntensity * 13, speed: 0.65, offset: 0 },
+        { color: 'rgba(24, 19, 14, 0.60)', freq: 0.018, amp: 4 + geminiIntensity * 9, speed: 0.92, offset: 2.1 },
       ];
       inkWaves.forEach(iw => {
         ctx.beginPath();
         ctx.moveTo(0, h);
         for (let x = 0; x <= w; x += 6) {
           const y = cy + 4 + Math.sin(x * iw.freq + geminiPhase * iw.speed + iw.offset) * iw.amp
-                           + Math.cos(x * iw.freq * 1.8 - geminiPhase * 0.5) * (iw.amp * 0.45);
+                           + Math.cos(x * iw.freq * 1.85 - geminiPhase * 0.5) * (iw.amp * 0.42);
           ctx.lineTo(x, y);
         }
         ctx.lineTo(w, h);
@@ -462,37 +529,63 @@ function startGeminiWave() {
         ctx.fill();
       });
 
-      // 용융 순금 킨츠기 맥락(Vein) 주선
+      // 3. 용융 순금 킨츠기 맥락 (자연 균열 미세 굴절 + 활성 시 지맥 분기)
+      const veinY = x => {
+        const p = geminiPhase * 0.88;
+        const crack = Math.sin(x * 0.088 + 1.3) * Math.cos(x * 0.037) * (0.8 + geminiIntensity * 1.6);
+        return cy + Math.sin(x * 0.016 + p) * (2.5 + geminiIntensity * 12)
+                  + Math.sin(x * 0.041 - p * 1.25) * (1.1 + geminiIntensity * 3.8)
+                  + crack;
+      };
+
+      if (geminiIntensity > 0.22) {
+        ctx.strokeStyle = `rgba(229, 190, 110, ${(0.22 + geminiIntensity * 0.35).toFixed(2)})`;
+        ctx.lineWidth = 0.85;
+        for (let b = 0; b < 2; b++) {
+          const anchorX = w * (0.28 + b * 0.44) + Math.sin(geminiPhase * 0.4 + b * 2) * (w * 0.08);
+          const ay = veinY(anchorX);
+          const dir = b === 0 ? -1 : 1;
+          ctx.beginPath();
+          ctx.moveTo(anchorX, ay);
+          ctx.lineTo(anchorX + 16, ay + dir * (4 + geminiIntensity * 7));
+          ctx.lineTo(anchorX + 34, ay + dir * (2 + geminiIntensity * 5));
+          ctx.stroke();
+        }
+      }
+
       ctx.beginPath();
       for (let x = 0; x <= w; x += 3) {
-        const p = geminiPhase * 0.9;
-        const y = cy + Math.sin(x * 0.016 + p) * (2.5 + geminiIntensity * 13)
-                     + Math.sin(x * 0.043 - p * 1.3) * (1.2 + geminiIntensity * 4);
+        const y = veinY(x);
         if (x === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
       const goldGrad = ctx.createLinearGradient(0, 0, w, 0);
-      goldGrad.addColorStop(0, 'rgba(181, 133, 49, 0.25)');
-      goldGrad.addColorStop(0.25, '#f4d37e');
-      goldGrad.addColorStop(0.55, '#fff4cc');
-      goldGrad.addColorStop(0.85, '#d8a648');
-      goldGrad.addColorStop(1, 'rgba(181, 133, 49, 0.25)');
+      goldGrad.addColorStop(0, 'rgba(181, 133, 49, 0.2)');
+      goldGrad.addColorStop(0.24, '#f2cf78');
+      goldGrad.addColorStop(0.54, '#fff4cf');
+      goldGrad.addColorStop(0.82, '#d8a648');
+      goldGrad.addColorStop(1, 'rgba(181, 133, 49, 0.2)');
       ctx.strokeStyle = goldGrad;
-      ctx.lineWidth = 1.6 + geminiIntensity * 1.8;
-      ctx.shadowColor = 'rgba(244, 211, 126, 0.75)';
-      ctx.shadowBlur = 9;
+      ctx.lineWidth = 1.45 + geminiIntensity * 1.65;
+      ctx.shadowColor = 'rgba(244, 211, 126, 0.72)';
+      ctx.shadowBlur = 8;
       ctx.stroke();
 
-      // 미세 금박 부유 입자
+      // 4. 비등방성 회전 금박 편(Kinpaku flakes)
       ctx.shadowBlur = 0;
       for (let i = 0; i < 14; i++) {
-        const px = ((i * 73.7 + geminiPhase * (18 + (i % 4) * 5)) % (w + 20)) - 10;
-        const py = cy + Math.sin(geminiPhase * 0.8 + i * 1.7) * (h * 0.34);
-        const alpha = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(geminiPhase * 2.1 + i));
-        ctx.fillStyle = `rgba(255, 232, 165, ${alpha.toFixed(2)})`;
-        ctx.beginPath();
-        ctx.arc(px, py, 0.9 + (i % 2) * 0.6, 0, Math.PI * 2);
-        ctx.fill();
+        const px = ((i * 73.7 + geminiPhase * (16 + (i % 4) * 4.5)) % (w + 20)) - 10;
+        const py = cy + Math.sin(geminiPhase * 0.78 + i * 1.7) * (h * 0.34);
+        const tilt = Math.cos(geminiPhase * 1.9 + i * 1.3);
+        const alpha = 0.2 + 0.65 * Math.abs(tilt);
+        const sz = 1.2 + (i % 3) * 0.45;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(geminiPhase * 0.6 + i);
+        ctx.scale(Math.max(0.18, Math.abs(tilt)), 1);
+        ctx.fillStyle = `rgba(255, 232, 168, ${alpha.toFixed(2)})`;
+        ctx.fillRect(-sz, -sz * 0.6, sz * 2, sz * 1.2);
+        ctx.restore();
       }
 
       ctx.restore();
@@ -503,25 +596,26 @@ function startGeminiWave() {
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
 
-      // 반짝이는 미세 별빛 입자
-      for (let i = 0; i < 22; i++) {
-        const sx = ((i * 59.3) % w);
-        const sy = 6 + ((i * 31.7) % Math.max(12, h - 12));
-        const twinkle = 0.2 + 0.75 * (0.5 + 0.5 * Math.sin(geminiPhase * 2.6 + i * 1.9));
-        ctx.fillStyle = i % 3 === 0
-          ? `rgba(246, 207, 164, ${twinkle.toFixed(2)})`
-          : i % 3 === 1
-            ? `rgba(232, 169, 198, ${twinkle.toFixed(2)})`
-            : `rgba(197, 182, 255, ${twinkle.toFixed(2)})`;
-        ctx.beginPath();
-        ctx.arc(sx, sy, 0.8 + (i % 3) * 0.45, 0, Math.PI * 2);
-        ctx.fill();
+      // 1. 스펙트럼 미세 별빛 + 4각 회절 성광
+      for (let i = 0; i < 18; i++) {
+        const sx = ((i * 61.7) % w);
+        const sy = 5 + ((i * 29.3) % Math.max(12, h - 10));
+        const twinkle = 0.2 + 0.72 * (0.5 + 0.5 * Math.sin(geminiPhase * 2.4 + i * 1.9));
+        const rgb = i % 3 === 0 ? '246,207,164' : i % 3 === 1 ? '232,169,198' : '197,182,255';
+        if (i < 4) {
+          drawFourPointStar(ctx, sx, sy, 3.0 + twinkle * 2.0, 0.22, twinkle * 0.9, rgb);
+        } else {
+          ctx.fillStyle = `rgba(${rgb}, ${twinkle.toFixed(2)})`;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 0.7 + (i % 3) * 0.35, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
-      // 은하수 오팔 리본 웨이브
+      // 2. 진주광택 오팔 성운 리본
       const ribbons = [
-        { c1: 'rgba(245, 207, 168, 0.34)', c2: 'rgba(231, 164, 196, 0.28)', freq: 0.015, mul: 1.0, amp: 4 + geminiIntensity * 17, offset: 0 },
-        { c1: 'rgba(184, 158, 248, 0.36)', c2: 'rgba(151, 236, 208, 0.22)', freq: 0.021, mul: -0.8, amp: 3 + geminiIntensity * 14, offset: 2.3 },
+        { c1: 'rgba(245, 207, 168, 0.30)', c2: 'rgba(231, 164, 196, 0.24)', freq: 0.014, mul: 0.95, amp: 4 + geminiIntensity * 16, offset: 0 },
+        { c1: 'rgba(184, 158, 248, 0.32)', c2: 'rgba(151, 236, 208, 0.20)', freq: 0.020, mul: -0.78, amp: 3 + geminiIntensity * 13, offset: 2.3 },
       ];
       ribbons.forEach(r => {
         const g = ctx.createLinearGradient(0, 0, w, 0);
@@ -543,24 +637,42 @@ function startGeminiWave() {
         ctx.fill();
       });
 
-      // 샴페인 진주빛 코어 유성 웨이브
+      // 3. 교차 공전 하모닉 궤도 실선 + 문스톤 코어 파동
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += 4) {
+        const y = cy + Math.cos(x * 0.015 - geminiPhase * 0.75) * (2.5 + geminiIntensity * 10);
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = 'rgba(202, 188, 255, 0.42)';
+      ctx.lineWidth = 0.9;
+      ctx.stroke();
+
+      const stellarCoreY = x => cy + Math.sin(x * 0.017 + geminiPhase * 1.05) * (3 + geminiIntensity * 12.5)
+                                   + Math.cos(x * 0.029 - geminiPhase * 0.8) * (1.3 + geminiIntensity * 4.8);
       ctx.beginPath();
       for (let x = 0; x <= w; x += 3) {
-        const y = cy + Math.sin(x * 0.017 + geminiPhase * 1.1) * (3 + geminiIntensity * 13)
-                     + Math.cos(x * 0.029 - geminiPhase * 0.8) * (1.4 + geminiIntensity * 5);
+        const y = stellarCoreY(x);
         if (x === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
       const coreGrad = ctx.createLinearGradient(0, 0, w, 0);
-      coreGrad.addColorStop(0, 'rgba(245, 207, 168, 0.25)');
-      coreGrad.addColorStop(0.35, 'rgba(255, 246, 238, 0.92)');
-      coreGrad.addColorStop(0.7, 'rgba(232, 169, 198, 0.9)');
-      coreGrad.addColorStop(1, 'rgba(184, 158, 248, 0.25)');
+      coreGrad.addColorStop(0, 'rgba(245, 207, 168, 0.22)');
+      coreGrad.addColorStop(0.35, 'rgba(255, 248, 240, 0.94)');
+      coreGrad.addColorStop(0.7, 'rgba(232, 169, 198, 0.88)');
+      coreGrad.addColorStop(1, 'rgba(184, 158, 248, 0.22)');
       ctx.strokeStyle = coreGrad;
-      ctx.lineWidth = 1.5 + geminiIntensity * 1.5;
-      ctx.shadowColor = 'rgba(242, 195, 224, 0.75)';
-      ctx.shadowBlur = 10;
+      ctx.lineWidth = 1.45 + geminiIntensity * 1.4;
+      ctx.shadowColor = 'rgba(242, 195, 224, 0.72)';
+      ctx.shadowBlur = 9;
       ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // 파동 능선을 따라 흐르는 성광 다이아몬드 입자
+      for (let k = 0; k < 3; k++) {
+        const kx = ((geminiPhase * (22 + k * 9) + k * w * 0.34) % (w + 16)) - 8;
+        drawFourPointStar(ctx, kx, stellarCoreY(kx), 2.8 + geminiIntensity * 1.8, 0.22, 0.85, '255,244,234');
+      }
 
       ctx.restore();
       return;
@@ -889,6 +1001,8 @@ async function analyze(fileList){
   $('resumeBtn').classList.toggle('hidden', !(done>0 && done<totalPages));
   $('resumeBtn').textContent = `이어하기 (${done}/${totalPages} 완료)`;
   updateEta();
+  const dr = $('drop')?.getBoundingClientRect();
+  if (dr) triggerThemeImpulse(dr.left + dr.width * 0.5, dr.top + dr.height * 0.5);
 }
 $('clearBtn').onclick = () => { if (pdfFile || imageFiles.length) { sessionStorage.removeItem(sig()); $('resumeBtn').classList.add('hidden'); log('캐시 삭제됨'); } };
 
@@ -1156,6 +1270,7 @@ async function convert(resume){
     }
     if (cnt < totalPages){ log(`⚠ ${failed.length}페이지 실패 – [이어하기]로 재시도하세요.`); return; }
     if (isGoogle) updateGeminiWaveState('done', 1.0);
+    triggerThemeImpulse(window.innerWidth * 0.5, window.innerHeight * 0.36);
     log('모든 페이지 완료 → 벡터 PDF 생성 중…');
     await buildAndPrint(cache);
   } finally {
@@ -1396,6 +1511,8 @@ function stopBgEffects(){
     cancelAnimationFrame(stellarAnimId);
     stellarAnimId = null;
   }
+  kintsugiImpulses.length = 0;
+  stellarImpulses.length = 0;
 }
 
 function startGeminiBgFlow(){
@@ -1504,40 +1621,146 @@ function startGeminiBgFlow(){
   geminiFlowAnimId = requestAnimationFrame(renderFlow);
 }
 
+/** 킨츠기 잉크: 우루시 미세 칠기 결 타일 생성 (1회 오프스크린 캐시) */
+function createUrushiPattern(ctx){
+  const tile = document.createElement('canvas');
+  tile.width = 160;
+  tile.height = 160;
+  const tctx = tile.getContext('2d');
+  const rng = createSeededRng(7719);
+
+  tctx.fillStyle = '#080706';
+  tctx.fillRect(0, 0, 160, 160);
+
+  // 수평/사선 미세 칠기 붓결
+  for (let i = 0; i < 420; i++){
+    const x = rng() * 160;
+    const y = rng() * 160;
+    const len = 10 + rng() * 28;
+    tctx.strokeStyle = rng() > 0.45
+      ? `rgba(255, 240, 200, ${(0.008 + rng() * 0.014).toFixed(4)})`
+      : `rgba(0, 0, 0, ${(0.18 + rng() * 0.22).toFixed(3)})`;
+    tctx.lineWidth = 0.6 + rng() * 0.6;
+    tctx.beginPath();
+    tctx.moveTo(x, y);
+    tctx.lineTo(x + len, y + (rng() - 0.5) * 2.2);
+    tctx.stroke();
+  }
+  // 미세 금분/광물 입자
+  for (let i = 0; i < 65; i++){
+    tctx.fillStyle = `rgba(229, 190, 110, ${(0.015 + rng() * 0.028).toFixed(4)})`;
+    tctx.fillRect(rng() * 160, rng() * 160, 1, 1);
+  }
+  return ctx.createPattern(tile, 'repeat');
+}
+
+/** 킨츠기 잉크: 결정론적 프랙탈 균열망(Root + Daughter Cracks) 생성 */
+function buildKintsugiFractures(W, H){
+  const rng = createSeededRng(20261113);
+  const minDim = Math.min(W, H);
+  const roots = [
+    { x: -6, y: H * 0.16, angle: 0.24, len: Math.min(W * 0.36, 360), width: 1.75 },
+    { x: -6, y: H * 0.78, angle: -0.38, len: Math.min(W * 0.40, 400), width: 1.9 },
+    { x: W + 6, y: H * 0.20, angle: Math.PI - 0.30, len: Math.min(W * 0.36, 360), width: 1.75 },
+    { x: W + 6, y: H * 0.84, angle: Math.PI + 0.26, len: Math.min(W * 0.38, 390), width: 1.85 },
+    { x: W * 0.64, y: H + 6, angle: -Math.PI * 0.57, len: Math.min(minDim * 0.34, 250), width: 1.45 },
+  ];
+
+  function grow(x, y, angle, lenRemain, width, depth, dFromRoot, segs){
+    const step = 16;
+    let cx = x, cy = y, ca = angle, rem = lenRemain, dist = dFromRoot;
+    while (rem > step && segs.length < 95){
+      const kink = rng() < 0.18 ? (rng() - 0.5) * 0.46 : 0;
+      ca += (rng() - 0.5) * 0.22 + kink;
+      const nx = cx + Math.cos(ca) * step;
+      const ny = cy + Math.sin(ca) * step;
+      segs.push({
+        x1: cx, y1: cy, x2: nx, y2: ny,
+        mx: (cx + nx) * 0.5, my: (cy + ny) * 0.5,
+        w: Math.max(0.55, width * (0.45 + 0.55 * (rem / lenRemain))),
+        d0: dist, d1: dist + step,
+      });
+      if (depth < 2 && rem > step * 3.5 && rng() < (depth === 0 ? 0.14 : 0.08)){
+        const dir = rng() < 0.5 ? 1 : -1;
+        grow(nx, ny, ca + dir * (0.42 + rng() * 0.44), rem * 0.58, width * 0.65, depth + 1, dist + step, segs);
+      }
+      cx = nx; cy = ny; rem -= step; dist += step;
+    }
+  }
+
+  return roots.map((r, id) => {
+    const segs = [];
+    grow(r.x, r.y, r.angle, r.len, r.width, 0, 0, segs);
+    const maxDist = segs.reduce((m, s) => Math.max(m, s.d1), 1);
+    return { id, segs, maxDist };
+  });
+}
+
 function startKintsugiBg(){
   if (kintsugiAnimId) return;
   const cv = $('kintsugiBgCanvas');
   if (!cv) return;
   const ctx = cv.getContext('2d');
+  kintsugiImpulses.length = 0;
 
-  // 수묵(먹물) 확산 구름 + 금박 입자 시드
-  const inkBlobs = Array.from({ length: 6 }, (_, i) => ({
-    bx: (0.14 + (i % 3) * 0.36),
-    by: (0.22 + Math.floor(i / 3) * 0.52),
-    rFrac: 0.24 + (i % 3) * 0.08,
-    speedX: 0.14 + (i % 2) * 0.07,
-    speedY: 0.11 + (i % 3) * 0.05,
-    phase: i * 1.35,
-    tint: i % 2 === 0 ? 'rgba(66, 54, 34, 0.26)' : 'rgba(28, 34, 42, 0.34)',
+  const urushiPattern = createUrushiPattern(ctx);
+  const inkPlumes = Array.from({ length: 5 }, (_, i) => ({
+    bx: [0.12, 0.88, 0.18, 0.84, 0.50][i],
+    by: [0.18, 0.24, 0.82, 0.78, 0.52][i],
+    rFrac: 0.22 + (i % 3) * 0.07,
+    speedX: 0.12 + (i % 2) * 0.06,
+    speedY: 0.09 + (i % 3) * 0.04,
+    phase: i * 1.45,
+    tint: i % 2 === 0 ? 'rgba(64, 50, 31, 0.24)' : 'rgba(24, 29, 36, 0.30)',
   }));
 
-  const goldFlecks = Array.from({ length: 42 }, (_, i) => ({
-    x: ((i * 97.3) % 100) / 100,
-    y: ((i * 53.1) % 100) / 100,
-    vy: 0.00018 + (i % 5) * 0.00006,
-    vx: (((i % 3) - 1) * 0.00009),
-    size: 0.9 + (i % 4) * 0.55,
-    phase: i * 0.85,
+  const rng = createSeededRng(4207);
+  const goldShards = Array.from({ length: 34 }, () => ({
+    x: rng(), y: rng(),
+    vy: 0.00014 + rng() * 0.00022,
+    vx: (rng() - 0.5) * 0.00012,
+    size: 1.2 + rng() * 1.7,
+    rot: rng() * Math.PI * 2,
+    vrot: (rng() - 0.5) * 0.015,
+    tilt: rng() * Math.PI * 2,
+    vtilt: 0.014 + rng() * 0.025,
+    phase: rng() * Math.PI * 2,
   }));
 
+  const pulses = [];
+  const ripples = [];
+  let fractures = [];
+  let lastW = 0, lastH = 0;
   let t = 0;
+  let nextAutoPulse = 140;
+  const reduced = prefersReducedMotion();
+
+  function launchVeinPulse(px, py){
+    if (!fractures.length) return;
+    let bestRoot = 0, bestOrigin = 0, bestDist2 = Infinity;
+    for (const root of fractures){
+      for (const s of root.segs){
+        const dx = s.mx - px, dy = s.my - py;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestDist2){
+          bestDist2 = d2;
+          bestRoot = root.id;
+          bestOrigin = s.d0;
+        }
+      }
+    }
+    const maxDist = fractures[bestRoot]?.maxDist || 360;
+    pulses.push({ rootId: bestRoot, origin: bestOrigin, travel: 0, maxTravel: maxDist + 90, speed: 4.8 });
+    if (pulses.length > 8) pulses.shift();
+  }
+
   function render(){
     if (state.skin !== 'kintsugi'){
       stopBgEffects();
       return;
     }
-    kintsugiAnimId = requestAnimationFrame(render);
-    t += 0.008;
+    if (!reduced) kintsugiAnimId = requestAnimationFrame(render);
+    if (document.hidden && !reduced) return;
 
     const W = window.innerWidth || 1280;
     const H = window.innerHeight || 800;
@@ -1546,60 +1769,191 @@ function startKintsugiBg(){
       cv.width = Math.round(W * dpr);
       cv.height = Math.round(H * dpr);
     }
+    if (!fractures.length || Math.abs(W - lastW) > 36 || Math.abs(H - lastH) > 36){
+      fractures = buildKintsugiFractures(W, H);
+      lastW = W; lastH = H;
+    }
+
+    t += 0.008;
+    const ptrFresh = skinPtr.active && (performance.now() - skinPtr.lastMoved < 6000);
+    const targetX = ptrFresh ? skinPtr.x : 0.5 + Math.sin(t * 0.28) * 0.30;
+    const targetY = ptrFresh ? skinPtr.y : 0.46 + Math.cos(t * 0.21) * 0.24;
+    skinPtr.sx += (targetX - skinPtr.sx) * 0.08;
+    skinPtr.sy += (targetY - skinPtr.sy) * 0.08;
+    const lx = skinPtr.sx * W;
+    const ly = skinPtr.sy * H;
+
+    // 클릭/드롭 임펄스 소비
+    while (kintsugiImpulses.length){
+      const imp = kintsugiImpulses.shift();
+      const ix = imp.nx * W, iy = imp.ny * H;
+      ripples.push({ x: ix, y: iy, r: 6, maxR: 155, life: 0, maxLife: 62 });
+      if (ripples.length > 6) ripples.shift();
+      launchVeinPulse(ix, iy);
+    }
+
+    if (!reduced){
+      nextAutoPulse -= 1;
+      if (nextAutoPulse <= 0 && fractures.length){
+        const rIdx = Math.floor(t * 17) % fractures.length;
+        pulses.push({ rootId: rIdx, origin: 0, travel: 0, maxTravel: fractures[rIdx].maxDist + 80, speed: 3.1 });
+        nextAutoPulse = 380;
+      }
+    }
+
     ctx.resetTransform();
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, W, H);
 
-    // 1. 유영하는 수묵 확산 구름
+    // 1. 우루시 칠기 브러시 결 코트
+    if (urushiPattern){
+      ctx.save();
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = urushiPattern;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
+
+    // 2. 다중 엽상 수묵(Sumi-e) 농담 번짐
     ctx.save();
     const baseDim = Math.max(W, H);
-    inkBlobs.forEach(b => {
-      const cx = (b.bx + Math.sin(t * b.speedX + b.phase) * 0.09) * W;
-      const cy = (b.by + Math.cos(t * b.speedY + b.phase * 1.2) * 0.08) * H;
-      const rad = b.rFrac * baseDim * (0.94 + 0.08 * Math.sin(t * 0.7 + b.phase));
+    inkPlumes.forEach((b, i) => {
+      const cx = (b.bx + Math.sin(t * b.speedX + b.phase) * 0.07) * W;
+      const cy = (b.by + Math.cos(t * b.speedY + b.phase * 1.15) * 0.06) * H;
+      const rad = b.rFrac * baseDim * (0.94 + 0.07 * Math.sin(t * 0.65 + b.phase));
       const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
       rg.addColorStop(0, b.tint);
-      rg.addColorStop(0.55, 'rgba(30, 25, 18, 0.14)');
-      rg.addColorStop(1, 'rgba(11, 10, 9, 0)');
+      rg.addColorStop(0.52, 'rgba(26, 21, 15, 0.13)');
+      rg.addColorStop(1, 'rgba(8, 7, 6, 0)');
       ctx.fillStyle = rg;
       ctx.beginPath();
       ctx.arc(cx, cy, rad, 0, Math.PI * 2);
       ctx.fill();
+
+      // 보조 수묵 번짐 엽
+      const ox = cx + Math.cos(t * 0.3 + i) * rad * 0.24;
+      const oy = cy + Math.sin(t * 0.25 + i) * rad * 0.18;
+      const rg2 = ctx.createRadialGradient(ox, oy, 0, ox, oy, rad * 0.62);
+      rg2.addColorStop(0, 'rgba(42, 34, 24, 0.14)');
+      rg2.addColorStop(1, 'rgba(8, 7, 6, 0)');
+      ctx.fillStyle = rg2;
+      ctx.beginPath();
+      ctx.arc(ox, oy, rad * 0.62, 0, Math.PI * 2);
+      ctx.fill();
     });
     ctx.restore();
 
-    // 2. 미세하게 뻗는 액체 순금 균열 베인 실루엣
+    // 펄스 진행 갱신
+    for (let i = pulses.length - 1; i >= 0; i--){
+      pulses[i].travel += pulses[i].speed;
+      if (pulses[i].travel > pulses[i].maxTravel) pulses.splice(i, 1);
+    }
+
+    // 3. 킨츠기 프랙탈 균열망 (음각 홈 → 벵가라 칠 → 앤티크 골드 → 스페큘러 용융 금맥)
     ctx.save();
-    ctx.strokeStyle = 'rgba(229, 190, 110, 0.13)';
-    ctx.lineWidth = 1.1;
-    for (let k = 0; k < 2; k++){
-      ctx.beginPath();
-      const startY = k === 0 ? H * 0.18 : H * 0.78;
-      ctx.moveTo(0, startY);
-      for (let x = 0; x <= W; x += 64){
-        const wave = Math.sin(x * 0.004 + t * 0.4 + k * 2.5) * 28
-                   + Math.cos(x * 0.011 - k) * 14;
-        ctx.lineTo(x, startY + (k === 0 ? x * 0.08 : -x * 0.06) + wave);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const litSegs = [];
+
+    for (const root of fractures){
+      for (const s of root.segs){
+        // 음각 홈 + 벵가라 + 기본 금계
+        ctx.strokeStyle = 'rgba(3, 2, 2, 0.80)';
+        ctx.lineWidth = s.w + 2.0;
+        ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(118, 46, 24, 0.24)';
+        ctx.lineWidth = s.w + 0.8;
+        ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(212, 166, 74, 0.29)';
+        ctx.lineWidth = s.w;
+        ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+
+        if (s.w > 1.25){
+          ctx.strokeStyle = 'rgba(255, 240, 194, 0.14)';
+          ctx.lineWidth = 0.55;
+          ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+        }
+
+        // 촛불 스페큘러 반사 + 용융 펄스 거리 계산
+        const dCursor = Math.hypot(s.mx - lx, s.my - ly);
+        let glow = smoothstep(235, 25, dCursor) * 0.68;
+        for (const p of pulses){
+          if (p.rootId !== root.id) continue;
+          const distFromWave = Math.abs(Math.abs(s.d0 - p.origin) - p.travel);
+          if (distFromWave < 88){
+            const pGlow = (1 - distFromWave / 88);
+            glow = Math.max(glow, pGlow * pGlow * 0.98);
+          }
+        }
+        if (glow > 0.04) litSegs.push({ s, glow });
       }
-      ctx.stroke();
+    }
+
+    for (const { s, glow } of litSegs){
+      ctx.strokeStyle = `rgba(244, 206, 114, ${(glow * 0.42).toFixed(3)})`;
+      ctx.lineWidth = s.w + 2.6;
+      ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
+
+      ctx.strokeStyle = `rgba(255, 247, 214, ${(glow * 0.92).toFixed(3)})`;
+      ctx.lineWidth = Math.max(0.65, s.w * 0.85);
+      ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke();
     }
     ctx.restore();
 
-    // 3. 떠오르는 금박 입자
+    // 4. 클릭/드롭 수묵·순금 파문
     ctx.save();
-    goldFlecks.forEach(f => {
-      f.y -= f.vy;
-      f.x += f.vx + Math.sin(t + f.phase) * 0.00008;
-      if (f.y < -0.02) f.y = 1.02;
-      if (f.x < 0) f.x = 1;
-      if (f.x > 1) f.x = 0;
-      const gleam = 0.25 + 0.65 * (0.5 + 0.5 * Math.sin(t * 2.4 + f.phase));
-      ctx.fillStyle = `rgba(246, 217, 138, ${gleam.toFixed(2)})`;
-      ctx.shadowColor = 'rgba(246, 217, 138, 0.6)';
-      ctx.shadowBlur = f.size > 1.8 ? 8 : 3;
+    for (let i = ripples.length - 1; i >= 0; i--){
+      const rp = ripples[i];
+      rp.life += 1;
+      if (rp.life >= rp.maxLife){ ripples.splice(i, 1); continue; }
+      const prog = rp.life / rp.maxLife;
+      const ease = 1 - Math.pow(1 - prog, 3);
+      const rad = rp.r + (rp.maxR - rp.r) * ease;
+      const fade = (1 - prog) * 0.55;
+
+      ctx.strokeStyle = `rgba(246, 217, 138, ${fade.toFixed(3)})`;
+      ctx.lineWidth = 1.15 * (1 - prog * 0.6);
+      ctx.beginPath(); ctx.arc(rp.x, rp.y, rad, 0, Math.PI * 2); ctx.stroke();
+
+      ctx.strokeStyle = `rgba(18, 15, 11, ${(fade * 0.7).toFixed(3)})`;
+      ctx.lineWidth = 3.5;
+      ctx.beginPath(); ctx.arc(rp.x, rp.y, rad * 0.78, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+
+    // 5. 비등방성 회전 금박 편(Kinpaku)
+    ctx.save();
+    goldShards.forEach(f => {
+      if (!reduced){
+        f.y -= f.vy;
+        f.x += f.vx + Math.sin(t + f.phase) * 0.00006;
+        f.rot += f.vrot;
+        f.tilt += f.vtilt;
+        if (f.y < -0.02) f.y = 1.02;
+        if (f.x < 0) f.x = 1;
+        if (f.x > 1) f.x = 0;
+      }
+      const tiltScale = Math.cos(f.tilt);
+      const gleam = 0.16 + 0.68 * Math.pow(Math.abs(tiltScale), 1.4);
+      ctx.save();
+      ctx.translate(f.x * W, f.y * H);
+      ctx.rotate(f.rot);
+      ctx.scale(Math.max(0.16, Math.abs(tiltScale)), 1);
+      ctx.fillStyle = `rgba(248, 221, 146, ${gleam.toFixed(2)})`;
+      if (f.size > 2.2){
+        ctx.shadowColor = 'rgba(246, 217, 138, 0.45)';
+        ctx.shadowBlur = 5;
+      }
       ctx.beginPath();
-      ctx.arc(f.x * W, f.y * H, f.size, 0, Math.PI * 2);
+      ctx.moveTo(-f.size, -f.size * 0.45);
+      ctx.lineTo(f.size * 0.85, -f.size * 0.65);
+      ctx.lineTo(f.size, f.size * 0.5);
+      ctx.lineTo(-f.size * 0.75, f.size * 0.6);
+      ctx.closePath();
       ctx.fill();
+      ctx.restore();
     });
     ctx.restore();
   }
@@ -1612,42 +1966,79 @@ function startStellarBg(){
   const cv = $('stellarBgCanvas');
   if (!cv) return;
   const ctx = cv.getContext('2d');
+  stellarImpulses.length = 0;
 
-  const hues = ['255,250,245', '246,207,164', '238,182,212', '198,184,255'];
-  const stars = Array.from({ length: 135 }, (_, i) => ({
-    x: Math.random(),
-    y: Math.random(),
-    r: i < 14 ? 1.8 + Math.random() * 1.1 : 0.6 + Math.random() * 1.2,
-    glint: i < 14,
-    phase: Math.random() * Math.PI * 2,
-    speed: 0.8 + Math.random() * 1.8,
-    drift: 0.00003 + Math.random() * 0.00005,
+  const rng = createSeededRng(20261113);
+  const hues = ['255,250,245', '246,207,164', '238,182,212', '198,184,255', '176,232,218'];
+
+  // 층위별 시차 별자리 데이터 (먼 별가루 / 중간 스펙트럼 별 / 7x4 격자 분산 성좌 앵커 별)
+  const dustStars = Array.from({ length: 84 }, (_, i) => ({
+    x: rng(), y: rng(),
+    r: 0.45 + rng() * 0.65,
+    phase: rng() * Math.PI * 2,
+    speed: 0.7 + rng() * 1.4,
+    drift: 0.000018 + rng() * 0.000032,
+    par: 5,
     rgb: hues[i % hues.length],
   }));
 
+  const midStars = Array.from({ length: 44 }, (_, i) => ({
+    x: rng(), y: rng(),
+    r: 0.9 + rng() * 0.75,
+    phase: rng() * Math.PI * 2,
+    speed: 1.0 + rng() * 1.7,
+    drift: 0.000028 + rng() * 0.00004,
+    par: 11,
+    rgb: hues[(i + 1) % hues.length],
+  }));
+
+  const anchorStars = [];
+  const cols = 7, rows = 4;
+  for (let r = 0; r < rows; r++){
+    for (let c = 0; c < cols; c++){
+      anchorStars.push({
+        bx: (c + 0.16 + rng() * 0.68) / cols,
+        by: (r + 0.16 + rng() * 0.68) / rows,
+        r: 2.8 + rng() * 1.8,
+        phase: rng() * Math.PI * 2,
+        speed: 0.9 + rng() * 1.5,
+        par: 18,
+        rgb: hues[(r * cols + c) % 4],
+      });
+    }
+  }
+
   const shootingStars = [];
-  function spawnMeteor(){
+  const dustWake = [];
+  const starRipples = [];
+
+  function spawnMeteor(custom){
+    const sx = custom ? Math.min(0.95, custom.nx + 0.16) : (0.28 + Math.random() * 0.68);
+    const sy = custom ? Math.max(0.03, custom.ny - 0.14) : (0.04 + Math.random() * 0.34);
     shootingStars.push({
-      x: 0.25 + Math.random() * 0.72,
-      y: Math.random() * 0.35,
-      vx: -(0.0045 + Math.random() * 0.0035),
-      vy: 0.0028 + Math.random() * 0.0022,
+      x: sx, y: sy,
+      vx: -(0.0042 + Math.random() * 0.0028),
+      vy: 0.0022 + Math.random() * 0.0018,
+      curve: 0.000042,
       life: 0,
-      maxLife: 55 + Math.random() * 35,
-      len: 110 + Math.random() * 90,
-      rgb: Math.random() > 0.45 ? '255,235,215' : '232,190,255',
+      maxLife: 54 + Math.random() * 30,
+      len: 105 + Math.random() * 80,
+      rgb: Math.random() > 0.45 ? '255,235,215' : '226,198,255',
     });
   }
-  spawnMeteor(); // 진입 즉시 1개의 유성이 스쳐 지나가도록 연출
+  if (!prefersReducedMotion()) spawnMeteor();
 
   let t = 0;
-  let meteorCooldown = 110;
+  let meteorCooldown = 135;
+  const reduced = prefersReducedMotion();
+
   function render(){
     if (state.skin !== 'stellar'){
       stopBgEffects();
       return;
     }
-    stellarAnimId = requestAnimationFrame(render);
+    if (!reduced) stellarAnimId = requestAnimationFrame(render);
+    if (document.hidden && !reduced) return;
     t += 0.016;
 
     const W = window.innerWidth || 1280;
@@ -1657,52 +2048,176 @@ function startStellarBg(){
       cv.width = Math.round(W * dpr);
       cv.height = Math.round(H * dpr);
     }
+
+    const ptrFresh = skinPtr.active && (performance.now() - skinPtr.lastMoved < 6000);
+    const targetX = ptrFresh ? skinPtr.x : 0.5 + Math.sin(t * 0.22) * 0.28;
+    const targetY = ptrFresh ? skinPtr.y : 0.42 + Math.cos(t * 0.17) * 0.22;
+    skinPtr.sx += (targetX - skinPtr.sx) * 0.07;
+    skinPtr.sy += (targetY - skinPtr.sy) * 0.07;
+    const px = (skinPtr.sx - 0.5) * 2; // -1 .. 1 parallax vector
+    const py = (skinPtr.sy - 0.5) * 2;
+    const mx = skinPtr.sx * W;
+    const my = skinPtr.sy * H;
+
+    while (stellarImpulses.length){
+      const imp = stellarImpulses.shift();
+      starRipples.push({ x: imp.nx * W, y: imp.ny * H, r: 8, maxR: 130, life: 0, maxLife: 56 });
+      if (starRipples.length > 6) starRipples.shift();
+      spawnMeteor(imp);
+    }
+
     ctx.resetTransform();
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, W, H);
 
-    // 1. 별빛 & 4각 다이아몬드 성광
+    // 1. 천구 성도(Astrolabe) 초박형 공전 궤도 호 & 눈금
     ctx.save();
-    stars.forEach(s => {
-      s.y -= s.drift;
-      if (s.y < -0.01) s.y = 1.01;
-      const sx = s.x * W;
-      const sy = s.y * H;
-      const alpha = 0.25 + 0.7 * (0.5 + 0.5 * Math.sin(t * s.speed + s.phase));
-
-      ctx.fillStyle = `rgba(${s.rgb}, ${alpha.toFixed(2)})`;
+    const astCx = W * 0.5 + px * 8;
+    const astCy = H * 0.44 + py * 8;
+    const baseR = Math.min(W, H);
+    [baseR * 0.40, baseR * 0.62].forEach((rad, idx) => {
+      const rot = t * (idx === 0 ? 0.018 : -0.012);
+      ctx.save();
+      ctx.translate(astCx, astCy);
+      ctx.rotate(rot);
+      ctx.strokeStyle = 'rgba(232, 214, 252, 0.068)';
+      ctx.lineWidth = 0.75;
+      ctx.setLineDash(idx === 0 ? [3, 9] : [18, 12, 2, 12]);
       ctx.beginPath();
-      ctx.arc(sx, sy, s.r, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (s.glint && alpha > 0.62){
-        const arm = s.r * (3.2 + alpha * 2.5);
-        ctx.strokeStyle = `rgba(${s.rgb}, ${(alpha * 0.55).toFixed(2)})`;
-        ctx.lineWidth = 0.85;
-        ctx.beginPath();
-        ctx.moveTo(sx - arm, sy); ctx.lineTo(sx + arm, sy);
-        ctx.moveTo(sx, sy - arm); ctx.lineTo(sx, sy + arm);
-        ctx.stroke();
+      ctx.arc(0, 0, rad, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (idx === 0){
+        ctx.strokeStyle = 'rgba(246, 207, 164, 0.095)';
+        for (let a = 0; a < 24; a++){
+          const th = (a / 24) * Math.PI * 2;
+          const r1 = rad - 3, r2 = rad + (a % 3 === 0 ? 6 : 3);
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(th) * r1, Math.sin(th) * r1);
+          ctx.lineTo(Math.cos(th) * r2, Math.sin(th) * r2);
+          ctx.stroke();
+        }
       }
+      ctx.restore();
     });
     ctx.restore();
 
-    // 2. 대각선 유성우(별똥별)
-    meteorCooldown -= 1;
-    if (meteorCooldown <= 0){
-      spawnMeteor();
-      meteorCooldown = 110 + Math.floor(Math.random() * 120);
+    // 2. 원경 · 중경 시차 별빛
+    ctx.save();
+    const renderStarLayer = list => {
+      for (const s of list){
+        if (!reduced){
+          s.y -= s.drift;
+          if (s.y < -0.02) s.y = 1.02;
+        }
+        const sx = s.x * W + px * s.par;
+        const sy = s.y * H + py * s.par;
+        const alpha = 0.22 + 0.66 * (0.5 + 0.5 * Math.sin(t * s.speed + s.phase));
+        ctx.fillStyle = `rgba(${s.rgb}, ${alpha.toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+    renderStarLayer(dustStars);
+    renderStarLayer(midStars);
+    ctx.restore();
+
+    // 3. 성좌 앵커 별 & 커서 기반 성좌 필라멘트 직조(Constellation Weaver)
+    ctx.save();
+    const activeFactor = ptrFresh ? 1.0 : 0.42;
+    const anchorPts = anchorStars.map(s => {
+      const sx = (s.bx + Math.sin(t * 0.16 + s.phase) * 0.004) * W + px * s.par;
+      const sy = (s.by + Math.cos(t * 0.14 + s.phase) * 0.004) * H + py * s.par;
+      const dist = Math.hypot(sx - mx, sy - my);
+      const awaken = smoothstep(285, 36, dist) * activeFactor;
+      const twinkle = 0.35 + 0.62 * (0.5 + 0.5 * Math.sin(t * s.speed + s.phase));
+      return { s, sx, sy, dist, awaken, twinkle };
+    });
+
+    for (let i = 0; i < anchorPts.length; i++){
+      const a = anchorPts[i];
+      if (a.awaken <= 0.06) continue;
+      for (let j = i + 1; j < anchorPts.length; j++){
+        const b = anchorPts[j];
+        if (b.awaken <= 0.06) continue;
+        const d = Math.hypot(a.sx - b.sx, a.sy - b.sy);
+        if (d < 255){
+          const linkAlpha = Math.min(a.awaken, b.awaken) * (1 - d / 255) * 0.68;
+          const lg = ctx.createLinearGradient(a.sx, a.sy, b.sx, b.sy);
+          lg.addColorStop(0, `rgba(246, 207, 164, ${linkAlpha.toFixed(3)})`);
+          lg.addColorStop(1, `rgba(198, 184, 255, ${linkAlpha.toFixed(3)})`);
+          ctx.strokeStyle = lg;
+          ctx.lineWidth = 0.72;
+          ctx.beginPath();
+          ctx.moveTo(a.sx, a.sy);
+          ctx.lineTo(b.sx, b.sy);
+          ctx.stroke();
+        }
+      }
+    }
+
+    let nearest = null;
+    for (const p of anchorPts){
+      if (ptrFresh && p.dist < 135 && (!nearest || p.dist < nearest.dist)) nearest = p;
+      const alpha = Math.min(1, p.twinkle * 0.72 + p.awaken * 0.45);
+      const flareR = p.s.r * (0.9 + p.twinkle * 0.55 + p.awaken * 0.65);
+      drawFourPointStar(ctx, p.sx, p.sy, flareR, 0.21, alpha, p.s.rgb);
+    }
+
+    if (nearest){
+      const retAlpha = smoothstep(135, 25, nearest.dist) * 0.36;
+      ctx.save();
+      ctx.translate(nearest.sx, nearest.sy);
+      ctx.rotate(t * 0.35);
+      ctx.strokeStyle = `rgba(246, 212, 174, ${retAlpha.toFixed(3)})`;
+      ctx.lineWidth = 0.75;
+      for (let q = 0; q < 4; q++){
+        const a0 = q * Math.PI * 0.5 + 0.18;
+        const a1 = a0 + Math.PI * 0.32;
+        ctx.beginPath();
+        ctx.arc(0, 0, 11, a0, a1);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // 4. 클릭/드롭 진주빛 오팔 파문
+    ctx.save();
+    for (let i = starRipples.length - 1; i >= 0; i--){
+      const rp = starRipples[i];
+      rp.life += 1;
+      if (rp.life >= rp.maxLife){ starRipples.splice(i, 1); continue; }
+      const prog = rp.life / rp.maxLife;
+      const rad = rp.r + (rp.maxR - rp.r) * (1 - Math.pow(1 - prog, 3));
+      const fade = (1 - prog) * 0.45;
+      ctx.strokeStyle = `rgba(242, 198, 228, ${fade.toFixed(3)})`;
+      ctx.lineWidth = 1.05;
+      ctx.beginPath(); ctx.arc(rp.x, rp.y, rad, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+
+    // 5. 곡선 궤도 유성우 & 이온화 별가루 잔상
+    if (!reduced){
+      meteorCooldown -= 1;
+      if (meteorCooldown <= 0){
+        spawnMeteor();
+        meteorCooldown = 125 + Math.floor(Math.random() * 120);
+      }
     }
 
     ctx.save();
+    ctx.globalCompositeOperation = 'screen';
     for (let i = shootingStars.length - 1; i >= 0; i--){
       const m = shootingStars[i];
       m.x += m.vx;
       m.y += m.vy;
+      m.vy += m.curve;
       m.life += 1;
-      if (m.life >= m.maxLife){
-        shootingStars.splice(i, 1);
-        continue;
+      if (m.life >= m.maxLife){ shootingStars.splice(i, 1); continue; }
+      if (m.life % 4 === 0 && dustWake.length < 40){
+        dustWake.push({ x: m.x, y: m.y, life: 0, maxLife: 24, rgb: m.rgb });
       }
       const prog = m.life / m.maxLife;
       const fade = prog < 0.2 ? prog / 0.2 : Math.max(0, 1 - (prog - 0.2) / 0.8);
@@ -1713,29 +2228,86 @@ function startStellarBg(){
       const ty = hy - (m.vy * H / norm) * m.len;
 
       const mg = ctx.createLinearGradient(hx, hy, tx, ty);
-      mg.addColorStop(0, `rgba(255, 250, 245, ${(fade * 0.95).toFixed(2)})`);
-      mg.addColorStop(0.35, `rgba(${m.rgb}, ${(fade * 0.55).toFixed(2)})`);
+      mg.addColorStop(0, `rgba(255, 250, 245, ${(fade * 0.92).toFixed(2)})`);
+      mg.addColorStop(0.35, `rgba(${m.rgb}, ${(fade * 0.52).toFixed(2)})`);
       mg.addColorStop(1, 'rgba(255, 255, 255, 0)');
-
       ctx.strokeStyle = mg;
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
       ctx.moveTo(hx, hy);
       ctx.lineTo(tx, ty);
       ctx.stroke();
 
-      ctx.fillStyle = `rgba(255, 252, 248, ${fade.toFixed(2)})`;
-      ctx.shadowColor = `rgba(${m.rgb}, 0.8)`;
-      ctx.shadowBlur = 10;
+      drawFourPointStar(ctx, hx, hy, 4.4, 0.24, fade * 0.95, '255,250,244');
+    }
+
+    for (let i = dustWake.length - 1; i >= 0; i--){
+      const d = dustWake[i];
+      d.life += 1;
+      if (d.life >= d.maxLife){ dustWake.splice(i, 1); continue; }
+      const fade = (1 - d.life / d.maxLife) * 0.55;
+      ctx.fillStyle = `rgba(${d.rgb}, ${fade.toFixed(2)})`;
       ctx.beginPath();
-      ctx.arc(hx, hy, 1.9, 0, Math.PI * 2);
+      ctx.arc(d.x * W, d.y * H, 1.0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
     }
     ctx.restore();
   }
 
   stellarAnimId = requestAnimationFrame(render);
+}
+
+let skinBridgeReady = false;
+function initSkinInteractiveBridge(){
+  if (skinBridgeReady) return;
+  skinBridgeReady = true;
+
+  let activeEls = [];
+  const clearSheen = () => {
+    for (const el of activeEls) el.style.setProperty('--card-op', '0');
+    activeEls = [];
+  };
+
+  window.addEventListener('pointermove', e => {
+    if (state.skin !== 'kintsugi' && state.skin !== 'stellar'){
+      if (activeEls.length) clearSheen();
+      return;
+    }
+    const w = Math.max(1, window.innerWidth || 1280);
+    const h = Math.max(1, window.innerHeight || 800);
+    skinPtr.x = Math.max(0, Math.min(1, e.clientX / w));
+    skinPtr.y = Math.max(0, Math.min(1, e.clientY / h));
+    skinPtr.active = true;
+    skinPtr.lastMoved = performance.now();
+
+    const target = e.target;
+    const nextEls = [];
+    if (target && typeof target.closest === 'function'){
+      const card = target.closest('.card');
+      const dropEl = target.closest('#drop');
+      if (card) nextEls.push(card);
+      if (dropEl) nextEls.push(dropEl);
+    }
+    for (const prev of activeEls){
+      if (!nextEls.includes(prev)) prev.style.setProperty('--card-op', '0');
+    }
+    for (const el of nextEls){
+      const r = el.getBoundingClientRect();
+      el.style.setProperty('--card-mx', `${Math.round(e.clientX - r.left)}px`);
+      el.style.setProperty('--card-my', `${Math.round(e.clientY - r.top)}px`);
+      el.style.setProperty('--card-op', '1');
+    }
+    activeEls = nextEls;
+  }, { passive: true });
+
+  window.addEventListener('pointerdown', e => {
+    if (state.skin === 'kintsugi' || state.skin === 'stellar'){
+      triggerThemeImpulse(e.clientX, e.clientY);
+    }
+  }, { passive: true });
+
+  window.addEventListener('pointerleave', clearSheen, { passive: true });
+  window.addEventListener('blur', clearSheen, { passive: true });
 }
 
 function startBgEffect(skin){
@@ -1753,6 +2325,9 @@ function applyTheme(skinName){
   } else {
     document.documentElement.setAttribute('data-theme', skin);
   }
+  if (skin !== 'kintsugi' && skin !== 'stellar'){
+    document.querySelectorAll('.card, #drop').forEach(el => el.style.removeProperty('--card-op'));
+  }
   startBgEffect(skin);
   document.querySelectorAll('.skin-option-card').forEach(card => {
     card.classList.toggle('active', card.dataset.skin === skin);
@@ -1761,6 +2336,7 @@ function applyTheme(skinName){
 }
 
 function initSkinSwitcher(){
+  initSkinInteractiveBridge();
   const modal = $('skinModal');
   const btnSecret = $('skinSecretBtn');
   const btnClose = $('skinModalClose');
