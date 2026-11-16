@@ -55,18 +55,31 @@
     <div class="f" style="flex:2;min-width:260px"><label for="apiKeyInput">API 키 (Google AI Studio / FactChat)</label>
       <input id="apiKeyInput" type="password" autocomplete="off" spellcheck="false" placeholder="API Key를 붙여넣으세요"></div>
     <div class="f sm"><label>상태</label><span id="apiStatusBadge" class="badge idle">● 키 입력 대기</span></div>
-    <div class="f" style="min-width:240px">
+    <div class="f" style="flex:1.5;min-width:300px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-        <label for="modelSelect">모델</label>
+        <label for="modelPickerBtn">모델</label>
         <div class="tooltip-wrap" id="tooltipWrap">
           <span id="modelBadge" class="badge clickable">● 모델 선택</span>
           <div id="modelTooltip" class="custom-tooltip hidden">
+            <div id="ttId" class="tt-id hidden"></div>
             <div id="ttDesc" style="font-weight:600;margin-bottom:4px"></div>
             <div id="ttCost" style="color:var(--ok);font-size:11px"></div>
           </div>
         </div>
       </div>
-      <select id="modelSelect" disabled><option value="">(키 입력 후 자동 로드)</option></select>
+      <select id="modelSelect" class="sr-only-select" disabled tabindex="-1" aria-hidden="true"><option value="">(키 입력 후 자동 로드)</option></select>
+      <div id="modelPicker" class="model-picker">
+        <button type="button" id="modelPickerBtn" class="mp-trigger" aria-haspopup="listbox" aria-expanded="false" disabled>
+          <span class="mp-trigger-left">
+            <span id="mpTriggerIcon" class="mp-icon" aria-hidden="true"></span>
+            <span id="mpTriggerLabel" class="mp-label">(키 입력 후 자동 로드)</span>
+          </span>
+          <span class="mp-trigger-right">
+            <span id="mpTriggerPill" class="mp-pill hidden"></span>
+            <span class="mp-caret" aria-hidden="true">▾</span>
+          </span>
+        </button>
+      </div>
     </div>
     <div class="f sm"><label for="concurrencySelect">병렬 처리 배수</label>
       <select id="concurrencySelect">
@@ -227,7 +240,7 @@
               <span class="skin-title">트와일라잇</span>
               <span class="skin-tag twilight">TWILIGHT</span>
             </div>
-            <div class="skin-subtitle">모노크롬 뉴모피즘과 은은한 바이올렛-블루</div>
+            <div class="skin-subtitle">연보라-블루가 스민 세련된 소프트 뉴모피즘</div>
           </div>
           <span class="skin-check-badge">✓</span>
         </div>
@@ -270,6 +283,9 @@
 </div>
 
 
+<!-- 커스텀 모델 피커 플로팅 메뉴 (카드 overflow/clip-path 영향 받지 않는 포탈) -->
+<div id="modelPickerMenu" class="mp-menu hidden" role="listbox" aria-label="모델 선택 목록"></div>
+
 <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
@@ -278,6 +294,6 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="app.js?v=20261113_v156"></script>
+<script src="app.js?v=20261116_v160"></script>
 </body>
 </html>

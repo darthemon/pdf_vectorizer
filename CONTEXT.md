@@ -1,7 +1,7 @@
 # 📄 PDF Vectorizer 컨텍스트 가이드 (CONTEXT.md)
 
 이 문서는 프로젝트의 **공용 기록 보관소(공유 두뇌)** 입니다. 아키텍처, 파일 역할, 핵심 함수 위치, 절대 훼손되면 안 되는 **불변 규칙**, 배포/테스트 방법, 결정 이력과 알려진 한계를 담습니다.
-코드를 바꾸면 이 문서의 관련 절도 **같은 작업 안에서** 함께 고치세요. (마지막 전면 검토: 2026-11-12, 코드와 대조 완료)
+코드를 바꾸면 이 문서의 관련 절도 **같은 작업 안에서** 함께 고치세요. (마지막 전면 검토: 2026-11-16, 코드와 대조 완료)
 
 ---
 
@@ -35,8 +35,8 @@ pdf-vectorizer/
 - 현재는 100% Client-Side 웹 애플리케이션으로 동작하며, 과거 로컬 런처/서버 관련 파일은 `legacy/` 하위로 완전 격리 분류되었습니다.
 
 ### 각 파일의 역할
-1. **`index.html`**: UI 마크업(API 키 입력 `#apiKeyInput`, 상태 배지 `#apiStatusBadge`, 모델 드롭다운 `#modelSelect`, 병렬 배수 `#concurrencySelect`, 쪽 번호 및 머리글/바닥글 옵션 `#optPgNum`/`#optPgHeader`/`#optPgFooter`, 드롭존, 4칸 정보 박스, 진행 카드, 결과/내보내기 카드, 숨겨진 스킨 스위처 버튼 `#skinSecretBtn`, 스킨 선택 모달 `#skinModal`). CDN 로드: PDF.js 3.11.174, Marked, Mermaid 10, KaTeX 0.16, html2canvas, jsPDF, JSZip.
-2. **`style.css`**: 컬러 변수(`:root`), 기본 옵시디언 다크 테마, 사이버펑크 2077 네온 펑크 테마(`[data-theme="cyberpunk"]`), Google AI Studio 코스믹 플로우 테마(`[data-theme="gemini"]`), 트와일라잇 뉴모피즘 테마(`[data-theme="twilight"]`), 베타 킨츠기 잉크(`[data-theme="kintsugi"]`), 베타 스텔라 리베리(`[data-theme="stellar"]`), `.grid4`/`.box`, `.gemini-wave-card`, `.badge`, `.custom-tooltip`, 스킨 모달 팝업.
+1. **`index.html`**: UI 마크업(API 키 입력 `#apiKeyInput`, 상태 배지 `#apiStatusBadge`, 숨겨진 상태용 네이티브 `<select id="modelSelect" class="sr-only-select">` + 접근성 커스텀 모델 피커 `#modelPicker`/`#modelPickerBtn` + 플로팅 메뉴 포탈 `#modelPickerMenu`, 툴팁 원본 ID 라인 `#ttId`, 병렬 배수 `#concurrencySelect`, 쪽 번호 및 머리글/바닥글 옵션 `#optPgNum`/`#optPgHeader`/`#optPgFooter`, 드롭존, 4칸 정보 박스, 진행 카드, 결과/내보내기 카드, 숨겨진 스킨 스위처 버튼 `#skinSecretBtn`, 스킨 선택 모달 `#skinModal`). CDN 로드: PDF.js 3.11.174, Marked, Mermaid 10, KaTeX 0.16, html2canvas, jsPDF, JSZip.
+2. **`style.css`**: 컬러 변수(`:root`), 기본 옵시디언 다크 테마, 사이버펑크 2077 네온 펑크 테마(`[data-theme="cyberpunk"]`), Google AI Studio 코스믹 플로우 테마(`[data-theme="gemini"]`), 트와일라잇 뉴모피즘 테마(`[data-theme="twilight"]`), 베타 킨츠기 잉크(`[data-theme="kintsugi"]`), 베타 스텔라 리베리(`[data-theme="stellar"]`), 커스텀 모델 피커(`.model-picker`, `.mp-trigger`, `.mp-menu`, `.mp-group-hdr`, `.mp-option`, `.mp-pill`, `.mp-preview-tag`) 및 6종 스킨별 오버라이드, `.grid4`/`.box`, `.gemini-wave-card`, `.badge`, `.custom-tooltip`, 스킨 모달 팝업.
 3. **`app.js`**: 아래 2절 표 참고.
 
 ---
@@ -45,20 +45,21 @@ pdf-vectorizer/
 
 | 영역 / 기능 | 주요 함수 / 식별자 | 설명 |
 | :--- | :--- | :--- |
-| **4단계 등급 & 가중치** | `MODEL_TIERS`, `getModelMeta(id)` | 모델 ID 키워드로 4단계(`flash`/`standard`/`high`/`ultra`) 판정. 단가·페이지당 초·배지·툴팁·경고문 포함 |
-| **크레딧 & 툴팁** | `estimateCredit(pages, model)`, `updateModelBadgeAndTooltip(model)` | 예상 크레딧 계산, 배지/툴팁/고비용 경고 배너(`#costWarn`) 동기화 |
-| **모델 필터링 & 정렬** | `isExcludedModel(id)`, `isNonTextId`, `NON_TEXT_RE`, `isNonTextMeta(obj)`, `filterValidModels(ids, p)`, `sortModelsByTier(ids)`, `PINNED_MODELS` | 비텍스트/파생 모델 제외, 등급순(추천 상단) 정렬 |
-| **엔드포인트 자동 감지** | `autoDetectAndLoadModels(key)`, `fetchModelIds(...)`, `probeModel(...)`, `PROVIDERS` | Google AI Studio / FactChat 자동 프로빙, 단일 모델 키 고정 |
+| **4단계 등급 & 가중치** | `MODEL_TIERS`, `GOOGLE_ROLE_META`, `classifyModelTier(parsed)`, `getModelMeta(id, raw)`, `getGoogleDisplayMeta(id)` | API 가격 메타데이터 + 제조사별 토큰 경계 판정으로 FactChat 4단계(`flash`/`standard`/`high`/`ultra` + 우측 균일 배지 `shortBadge`) 및 Google 역할 배지 판정 |
+| **크레딧 & 툴팁** | `estimateCredit(pages, model)`, `updateModelBadgeAndTooltip(model)` | 예상 크레딧 계산, 프로바이더별 배지/툴팁(`#ttId`에 실제 API 모델 코드 병기, Google은 세대·역할 중심, FactChat은 4단계 비용 등급+`#costWarn` 경고 배너) 동기화 |
+| **모델 파싱·분류·그룹핑** | `parseModelRecord(input)`, `VENDOR_CATALOG`, `VENDOR_LOGOS`, `isNonTextMeta(o)`, `isUnusableOcrModel(p)`, `formatModelDisplayName(id, raw)`, `buildUniqueDisplayMap(ids)`, `parseGoogleCanonical(p)`, `buildGoogleModelGroups(recs)`, `buildFactChatModelGroups(recs)`, `organizeModels(items, p)`, `filterValidModels(items, p)` | `/models` 메타 보존, 비-OCR/비-비전(`decision`/`search`/`codex`/구세대 GPT<4·Claude<3·Gemma<3 등) 제외, 깔끔한 표시명 정제 + 동명이종 구분, Google(세대·성능순) / FactChat(벤더·제조사 SVG 로고 + 저비용→초고비용 순) 분리 파이프라인 |
+| **커스텀 모델 피커 UI** | `initModelPicker()`, `renderModelPickerMenu()`, `syncModelPicker(rebuild)`, `openModelMenu()`, `closeModelMenu()`, `positionModelMenu()`, `selectModelFromPicker(id)`, `renderBrandIcon(el, key)`, `resetModelSelectPlaceholder(txt)` | `body` 포탈 기반 플로팅 메뉴(스킨 `clip-path`/`overflow:hidden` 회피), 제조사 인라인 SVG 로고, 모델명 좌측 수직 정렬 + 우측 고정폭 등급 알약(`.mp-pill`), 키보드 네비게이션 및 숨겨진 `#modelSelect` 양방향 동기화 |
+| **엔드포인트 자동 감지** | `autoDetectAndLoadModels(key)`, `fetchModelRecords(base, key)`, `fetchModelIds(...)`, `probeModel(...)`, `setModels(...)`, `pickDefaultModel(...)`, `PROVIDERS`, `modelRecordMap` | Google AI Studio / FactChat 자동 프로빙, 메타데이터 캐싱, 그룹핑 렌더링 및 단일 모델 키 고정 |
 | **프로바이더 UI 분기** | `updateProviderCardUi()` | FactChat(`#costBox`) vs Google(`#geminiWaveBox`) 4번째 카드 전환 |
 | **Gemini 오로라 웨이브** | `startGeminiWave()`, `updateGeminiWaveState(mode, prog)`, `stopGeminiWave()` | 3중 사인파 캔버스 (진행도에 비례해 역동성 증폭) |
-| **파일 분석 & ETA** | `analyze(fileList)`, `updateEta()`, `SEC_PER_PAGE`, `renderPageJpeg(n)`, `renderImageFileJpeg(file)` | PDF/이미지 파싱, 배속별 예상 시간, 페이지→JPEG 변환 |
-| **OCR 프롬프트** | `PROMPT` (상수) | 책 디지타이저 전사 규칙 (4절 참고) |
-| **API 통신 & 즉각 중단** | `callApi(dataUrl, cfg)`, `sleep(ms, signal)`, `abortCtrl` | 429/5xx 지수 백오프, AbortController 즉시 중단, `usage` 실측(없으면 글자 수 역산) |
+| **파일 분석 & ETA** | `analyze(fileList)`, `updateEta()`, `SEC_PER_PAGE`, `renderPageJpeg(n)`, `renderImageFileJpeg(file)`, `hasCachedPage(c,n)`, `countCachedPages(c)` | PDF/이미지 파싱, 배속별 예상 시간, 적응형 해상도·흰색 배경 JPEG 변환, 유효 캐시 페이지 판정 |
+| **OCR 프롬프트** | `PROMPT` (상수) | 책 디지타이저 전사 규칙 (3절 ⑧ 참고) |
+| **API 통신 & 즉각 중단** | `callApi(dataUrl, cfg)`, `unwrapOuterMarkdownFence(text)`, `sleep(ms, signal)`, `abortCtrl` | 408/429/5xx 백오프, `temperature:0` 미지원 폴백, JSON `error`/빈 응답 재시도, 외곽 펜스 안전 제거, 즉시 중단 |
 | **절전 방지** | `startKeepAlive()`, `stopKeepAlive()` | Wake Lock + 무음 Web Audio 루프 |
 | **변환 파이프라인** | `convert(resume)`, `worker()` | 병렬 워커 풀, 진행률/ETA/누적 토큰·크레딧 |
-| **페이지 서식(쪽 번호·머리글/바닥글)** | `splitPageMeta(md)`, `stripFurniture(body, meta, rep)`, `preparePages(cache)`, `pageDeco(info, idx, seqNo)`, `drawDeco(...)`, `decorateCanvas(cv, d)`, `initPageOptions()`, `rebuildFromCache()` | 응답 끝의 `<!--PAGE {...}-->` 분리, 본문에 섞인 머리글/바닥글/쪽 번호 제거(+여러 쪽 반복 줄 감지), 사용자 옵션(`state.pgNum/pgHeader/pgFooter`)에 따라 PDF/PNG/HTML/MD에 기록 |
-| **Markdown → HTML** | `mdToHtml(md)`, `renderPagesHtml(bodies)`, `fitWideMath(root)` | 수식 보호(`@@MATH n@@`) → marked(`breaks:true`) → KaTeX 치환, Mermaid→SVG, 본문보다 넓은 블록 수식은 글자 축소 |
-| **A4 분할 & 결과 생성** | `buildAndPrint(cache)`, `computePageCuts(stage, Hpx)`, `makeOutputsFromPages(pagesHtml, infos)` | 페이지 경계 계산, 5종 포맷 Blob 생성 (이름은 레거시, **인쇄 창은 띄우지 않음**). PDF는 A4 캔버스에 본문 조각+머리글/바닥글을 합성 |
+| **페이지 서식(쪽 번호·머리글/바닥글)** | `splitPageMeta(md)`, `stripFurniture(body, meta, rep)`, `preparePages(cache)`, `isBlockMarkdownLine(s)`, `pageDeco(info, idx, seqNo)`, `drawDeco(...)`, `decorateCanvas(cv, d)`, `initPageOptions()`, `rebuildFromCache()` | 응답 끝 `<!--PAGE {...}-->` 파싱(JSON 실패 시 정규식 폴백), 본문 내 머리글/바닥글/쪽 번호 제거(`**굵은 머리글**` 포함 반복 줄 감지·고립 쪽 번호 복원), 사용자 옵션에 따라 기록 |
+| **Markdown → HTML** | `mdToHtml(md)`, `fixKoreanBold(text)`, `normalizeLatexForKatex(tex, display)`, `replaceInlineDollarOnLine(line, put)`, `sanitizeMermaidCode(code)`, `renderPagesHtml(bodies)`, `fitWideMath(root)` | 백틱 수식 복원, 통화/표 구분 인라인 수식 스캔, 인용문/표 내 블록 수식 보존, 한국어 굵게·`<p align>`·각주(`[^n]`) 파싱, 빈 `<thead>` 제거, Mermaid 1차 실패 정제 재시도, 넓은 수식·표 폭 자동 축소 |
+| **A4 분할 & 결과 생성** | `buildAndPrint(cache)`, `computePageCuts(stage, Hpx)`, `makeOutputsFromPages(pagesHtml, infos)`, `outPdfPages` | 수식·표·연속 제목 보호 경계 계산, 5종 포맷 Blob 생성 (`updateExportFormatUI`에 PDF 분할 페이지 수 반영) |
 | **다운로드** | `download(kind, ext)`, `updateExportFormatUI()` | PDF / PNG / PNG-ZIP / HTML / MD |
 | **비주얼 스킨 & 테마** | `VALID_SKINS`, `applyTheme(skin)`, `initSkinSwitcher()`, `initSkinInteractiveBridge()`, `triggerThemeImpulse(...)`, `startBgEffect(skin)`, `stopBgEffects()`, `startGeminiBgFlow()`, `stopGeminiBgFlow()`, `startKintsugiBg()`, `startStellarBg()`, `createUrushiPattern(...)`, `buildKintsugiFractures(...)`, `drawFourPointStar(...)` | 6종 스킨 전환(`default`/`cyberpunk`/`gemini`/`twilight`/`kintsugi`/`stellar`) 및 `localStorage` 영구 유지. 테마별 배경 캔버스(`#kintsugiBgCanvas`, `#stellarBgCanvas`, `#geminiFlowCanvasLeft/Right`), 커서 기반 카드 반사광/임펄스 브리지, `geminiWaveCanvas` 전용 파형 자동 전환 |
 
@@ -71,32 +72,35 @@ pdf-vectorizer/
 ### ① API 엔드포인트 자동 감지 & 키 격리
 - 키가 `AIza`로 시작하면 `google` → `factchat` 순, 그 외는 `factchat` → `google` 순으로 `${base}/models`를 `Authorization: Bearer`로 프로빙.
   - Google: `https://generativelanguage.googleapis.com/v1beta/openai` / FactChat: `https://factchat-cloud.mindlogic.ai/v1/gateway`
-- `/models`가 **정확히 1개**만 반환 → 필터 예외로 그 모델 1개만 넣고 드롭다운 `disabled`(단일 모델 자동 고정).
-- `/models` 실패(권한 없음) → 대표 모델(`gemini-3.5-flash-lite`, `gemini-3.8-flash`)로 `max_tokens:1` 테스트 호출해 되는 모델로 고정.
+- `/models`가 **정확히 1개**만 반환(`rawCount === 1`) → 필터 예외로 그 모델 1개만 넣고 드롭다운 `disabled`(단일 모델 자동 고정).
+- `/models` 실패(권한 없음) → 대표 모델(`gemini-3.5-flash-lite`, `gemini-3.8-flash`, `gemini-4-hydrogen`, `gemini-2.5-flash`)로 `max_tokens:1` 테스트 호출해 되는 모델로 고정.
 - API 키는 `localStorage`에만 저장하며 **해당 API 엔드포인트 외 어떤 서버로도 전송 금지**. UI에 프로바이더/URL 수동 선택칸을 되살리지 않습니다(사용자 요구: 키 입력칸 하나로 완전 자동).
 
-### ② 4단계 모델 등급 분류 체계 (`getModelMeta`의 검사 순서가 곧 우선순위)
-순서: ultra → high → standard → flash → (그 외) standard.
+### ② 4단계 모델 등급 분류 체계 (`classifyModelTier` / `getModelMeta` · 제조사별 분리)
+순서: API `pricing`/`cost` 메타데이터 우선 → 제조사 스코프(`openai`/`anthropic`/`google`/기타) + 토큰 경계(`tokenSet`) 판정(부분문자열 `.includes()` 충돌 배제).
 
-| 등급 | 키워드 | 단가(1k토큰당 입/출) | 페이지당 초 | 페이지당 예상 크레딧 |
-| :--- | :--- | :--- | :--- | :--- |
-| 🟢 저비용·추천 | `flash`, `haiku`, `luna`, `gemma` | 0.4 / 1.2 | 4.2 | 약 1.6 |
-| 🔵 표준 모델 | `sonnet`, `terra`, `pro` (+매칭 없음 기본값) | 2.0 / 6.0 | 6.0 | 약 7.9 |
-| 🟠 고비용 주의 | `sol`, `opus`, `argon` | 6.0 / 18.0 | 8.5 | 약 23.7 |
-| 🔴 초고비용 경고 | `astra`, `fable`, `carbon` | 15.0 / 45.0 | 12.0 | 약 59.3 |
+| 등급 | FactChat 프리픽스 | 대표 모델 / 토큰 | 단가(1k토큰당 입/출) | 페이지당 초 | 페이지당 예상 크레딧 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 🟢 저비용·추천 | `[🟢추천]` | OpenAI `luna`/`mini`/`nano`, Claude `haiku`, Google `flash-lite`/`flash`/`gemma`, 경량 모델 | 0.4 / 1.2 | 4.2 | 약 1.6 |
+| 🔵 표준 모델 | `[🔵표준]` | OpenAI `terra`/기본 GPT, Claude `sonnet`, Google `pro`/`hydrogen` (+매칭 없음 기본값) | 2.0 / 6.0 | 6.0 | 약 7.9 |
+| 🟠 고비용 모델 | `[🟠고비용]` | OpenAI `sol`/`o1`/`o3`, Claude `opus`, Google `argon` | 6.0 / 18.0 | 8.5 | 약 23.7 |
+| 🔴 초고비용 모델 | `[🔴초고비용]` | OpenAI `astra`/OpenAI `-pro`/`-max`, Claude `fable`, Google `carbon`/`ultra` | 15.0 / 45.0 | 12.0 | 약 59.3 |
 
 - 페이지당 예상 토큰은 **입력 650 / 출력 1,100** 가정 (`pages*0.65*in + pages*1.1*out`). 단가는 **프로젝트 내부 추정 가중치**이며 FactChat 실제 차감과 다를 수 있습니다.
-- 🟠/🔴 선택 시 시작 버튼 위 경고 배너 표시(FactChat 한정, Google에서는 숨김).
-- **정렬**: `PINNED_MODELS`(`gemini-3.5-flash-lite`, `gemini-3.8-flash`) 최상단 → 등급(grade) 오름차순 → gemini 우선 → `perfScore`(등급/버전/날짜) 내림차순 → 이름순. 기본 선택은 `gemini-3.5-flash-lite`.
+- **프로바이더별 UI 분기**:
+  - **FactChat**: 커스텀 드롭다운 좌측에 깔끔한 모델명(수직 직선 정렬) + 우측 고정폭 알약 배지(`🟢 추천`~`🔴 초고비용`), 제조사 카테고리 헤더(`VENDOR_LOGOS` SVG 아이콘 포함: OpenAI · GPT 최상단 → Anthropic → Google → xAI → DeepSeek → Alibaba → Meta → Mistral → 기타) + 각 그룹 내부 저비용(`Luna` 등) → 초고비용(`Astra` 등) 순 정렬. 🟠/🔴 선택 시 `#costWarn` 경고 배너 표시.
+  - **Google AI Studio**: 드롭다운 비용 등급 알약 생략(세대·성능 순 및 `Preview` 태그만 표기), 세대별 그룹(`Gemini 4` → `Gemini 3` → `Gemini 2.5` → `Gemma`, 각 헤더에 `gemini`/`gemma` SVG 로고 표기), `#modelBadge`는 비용 경고 대신 `GOOGLE_ROLE_META`(세대·역할) 표기, `#ttId`에 원본 API ID 병기 및 `#costWarn` 숨김.
+- **안전 기본 선택(`pickDefaultModel`)**: 저장된 모델(`state.model`)이 없으면 표시 순서와 무관하게 경량 추천 모델(`gemini-3.5-flash-lite` / `gemini-3.8-flash` / `gemini-4-hydrogen` / `gpt-6-luna` 등)을 우선 자동 선택.
 
-### ③ 모델 필터링 규칙 (`isExcludedModel` → `filterValidModels`)
-- **공통 제외(비텍스트·특수)**: `NON_TEXT_RE`(embed/rerank/moderation/image/imagen/dall/flux/midjourney/diffusion/video/veo/sora/kling/runway/luma/pika/hailuo/seedance/seedream/banana/music/suno/lyria/tts/whisper/stt/transcri/speech/audio/voice/realtime/aqa/learnlm/robotics …) + `EXCLUDE_KEYWORDS`(`nano`, `1.0`, `1.5`, `2.0`, `exp`, `preview`, `live`, `thinking`, `omni`, `latest`, `translate`, `research`, `antigravity`, `customtools`, `computer-use` …).
-- **예외 필수**
-  - ID에 `3.1-pro`가 있으면(예: `gemini-3.1-pro-preview`) `preview` 키워드가 있어도 **정규 프로 모델로 허용**. 단, `customtools`/`image`가 붙으면 제외.
-  - `mini` 제외는 **반드시 단어 경계 정규식** `/(^|[-_/.])mini([-_/.]|$)/` 사용 (`gemini`를 오인 제외하면 안 됨).
-  - 중간 체크포인트 `3.1`/`3.6`/`3.7` 버전(경계 일치 시)은 제외 (단 위 `3.1-pro` 예외가 먼저 적용).
-- **Google 모드**: `gemini` 또는 `gemma` 포함 모델만. **FactChat 모드**: 제미나이 제한 해제(GPT/Claude/Gemini 등), 4단계 키워드(`FOUR_TIER_KEYWORDS`) 해당 모델을 우선 노출하고 해당이 하나도 없으면 공통 필터를 통과한 전체를 노출.
-- `/models` 응답에 메타(`type`/`output_modalities`/`capabilities`)가 있으면 `isNonTextMeta`로도 제외(모델이 2개 이상일 때만).
+### ③ 프로바이더별 모델 필터링 규칙 (`organizeModels` → `buildGoogleModelGroups` / `buildFactChatModelGroups`)
+- **공통 메타 & 비-OCR 제외 (`isNonTextMeta`, `isUnusableOcrModel`)**: `/models` 원본 메타(`supportedGenerationMethods`, `type`/`mode`, `output_modalities`, `capabilities`) + 토큰 경계 비텍스트/비전/특수 목적 모델(`tts`/`whisper`/`stt`/`audio`/`voice`/`live`/`realtime`/`imagen`/`dall-e`/`gpt-image`/`flux`/`veo`/`sora`/`video`/`image`/`banana`/`music`/`suno`/`lyria`/`embed`/`rerank`/`moderation`/`decision`/`decisions`/`search`/`research`/`codex`/`codestral`/`devstral`/`coder`/`guard`/`shield`/`safeguard`/`reward`/`eval`/`judge`/`batch`/`flex`/`priority`/`babbage`/`davinci`/`exp`/`experimental`/`thinking`/`computer-use`/`robotics`/`deep-research`/`customtools`/`cyber`/`shieldgemma`/`codegemma` 등) + 구세대 비-멀티모달(`GPT <4`, `Claude <3`, `Gemma <3`) 제외. 단 오픈웨이트 `-instruct`(`Qwen2.5-VL-72B-Instruct` 등)는 허용(`turbo-instruct`만 예외 차단). 부분문자열 오탐(예: `sol` vs `solar`, `mini` vs `gemini`) 차단.
+- **Google AI Studio (`buildGoogleModelGroups` · `parseGoogleCanonical`)**:
+  - `gemini-<ver>-(pro|flash-lite|flash)[-preview]`(2.5 이상) 및 `gemini-4+-(carbon|argon|hydrogen|...)[-preview]`, 멀티모달 `gemma-(3|4)-...-it` 만 정식 허용 → `-customtools`/`-cyber`/`-09-2025`/`-001`/`-latest`/`exp`/`thinking` 등 `-xxxx` 파생 접미사와 2.0 이하/소형 텍스트 Gemma(`1b`, `270m`, `gemma-2`) 깔끔히 배제.
+  - 정식 모델과 `-preview` 공존 시 `-preview` 자동 병합 제거(정식 없는 `gemini-3.1-pro-preview` 등은 유지하고 표시 UI에 `Preview` 배지 부착).
+  - Gemini 3.x 세대교체 구간은 동일 역할(`pro`/`flash`/`flash-lite`) 내 최신 minor만 유지(예: `3.6`/`3.7`/`3.1-flash-lite` 자동 정리 → `3.1-pro`·`3.8-flash`·`3.5-flash-lite`).
+- **FactChat (`buildFactChatModelGroups` · `pruneFactChatLineage` · `compareFactChatModels`)**:
+  - 키워드 화이트리스트(`FOUR_TIER_KEYWORDS`) 제한 폐기 → 비-OCR/특수 API(`-decision`, `-search-preview`, `-codex`, `-guard`, `-batch`, `-flex` 등)·구세대를 전 벤더 단위로 정리: `GPT-5.x`/`4.x`/`o-series`(`GPT-6+` 존재 시), `Claude 4.x/3.x`(`Claude 5+` 존재 시), `Gemini <2.5`, `Gemma <3`, `Grok <최신세대`, `Qwen <3`, `Llama <4`, `DeepSeek V-라인 구형`을 자동 pruning하고 동일 세대·역할 내 구형 마이너 및 중복 `-preview`/`-YYYYMMDD`/`-latest` 병합.
+  - `classifyModelTier`는 API 가격 메타가 있더라도 동일 등급 내부 정렬용 역할 순위(`subRank`)를 유지하며, FactChat `google` 카테고리는 `Gemini` 전체(저비용·경량→고비용·플래그십 순: `2.5` → `3.5 flash-lite` → `3.8 flash` → `3.1 pro` → `4 hydrogen` → `4 argon` → `4 carbon`)를 상단에, `Gemma` 전체(`4 → 3` 세대 내림차순, 파라미터 크기 내림차순)를 하단에 연속 배치해 `Gemma 4`/`Gemma 3` 분리를 원천 차단.
 
 ### ④ 프로바이더별 크레딧 vs 토큰 분기 표시
 - **FactChat**: 4번째 카드 `#costBox`. 페이지당 예상 크레딧 + 실시간 누적 차감 크레딧(`XX.X 크레딧`).
@@ -107,33 +111,35 @@ pdf-vectorizer/
 - 대기/완료: 잔잔한 한 줄기 오로라(`intensity = 0.12`), 변환 중: `done/totalPages`에 비례해 진폭·속도 증폭.
 
 ### ⑥ 네트워크 통신 & 중단(Stop) 즉각 반응
-- 429/500/503: 지수 백오프(`1000*2^a` 또는 `Retry-After`, 최대 30초, 최대 6회 재시도).
-- **[중단]** 클릭 시 429 대기 타이머(`sleep`)와 진행 중 `fetch`가 `AbortController`로 **즉시** 취소(0.01초 내).
+- 408/429/5xx 및 HTTP 200 내 일시적 `error`·빈 응답: 지수 백오프(`1000*2^a` 또는 `Retry-After`, 최대 30초, 최대 6회 재시도). `temperature: 0` 미지원 모델(HTTP 400)은 `temperature` 생략 자동 폴백.
+- **[중단]** 클릭 시 대기 타이머(`sleep`)와 진행 중 `fetch`가 `AbortController`로 **즉시** 취소(0.01초 내).
 
 ### ⑦ 백그라운드 탭 절전/동결 방지
 - 변환 중 `navigator.wakeLock` + 무음 `Web Audio` 루프를 유지해 탭 전환 시에도 타이머가 멈추지 않게 함. 종료/중단 시 반드시 `stopKeepAlive()`.
 
 ### ⑧ 내용 보존 우선 (OCR 계약) — 가장 중요한 품질 규칙
-- `PROMPT`(app.js)는 **요약·의역·번역·교정·순서변경·생략 금지**를 명시하고, 읽을 수 없는 글자는 추측 대신 `[?]`로 표기. 요청 시 `temperature: 0`. 응답 `finish_reason === 'length'`면 로그 경고.
-- 서식 규칙: 제목은 글자 크기/굵기 기준 `#`~`####`(본문 굵은 글씨를 제목으로 만들지 않음), 굵게 `**`, 기울임 `*`, 첨자 `<sup>/<sub>`, 취소선 `~~`, 목록 번호/들여쓰기 유지, 문단 줄바꿈 정리(문단 내 하드 줄바꿈 제거), 인용/박스 `>`, 각주 `[^n]`.
-- **수식**: 인라인 `$…$`, 블록 `$$…$$`, 유효한 KaTeX/LaTeX만. **코드 서식/백틱 안에 수식 금지**. 통화 `$`는 `\$`.
-- 표 → GitHub Markdown 표(셀 내 줄바꿈 `<br>`), 구조 있는 다이어그램 → ```mermaid, 사진/차트 → `*[그림: 설명 + 캡션 원문]*`.
+- `PROMPT`(app.js)는 **요약·의역·번역·교정·순서변경·생략 금지**를 명시하고, 읽을 수 없는 글자는 추측 대신 `[?]`로 표기. 요청 시 `temperature: 0`(미지원 시 자동 폴백). 응답 `finish_reason === 'length'`·`content_filter`면 로그 경고.
+- 서식 규칙: 제목은 글자 크기/굵기 기준 `#`~`####`(본문 굵은 글씨를 제목으로 만들지 않음), 굵게 `**`, 기울임 `*`, 첨자 `<sup>/<sub>`, 취소선 `~~`, 목록 번호/들여쓰기 유지, 문단 줄바꿈 정리(문단 내 하드 줄바꿈 제거), 인용/박스 `>`, 각주 `[^n]`. 문장 중간에 인접 사이드바·그림 캡션이 끼어들지 않게 문장을 먼저 완결한 뒤 부가 요소를 배치.
+- **수식**: 인라인 `$…$`(구분자 내측 여백 없음), 블록 `$$…$$`, 유효한 KaTeX/LaTeX만. **코드 서식/백틱 안에 수식 금지**. 통화 `$`는 `\$`.
+- 표 → GitHub Markdown 표(셀 내 줄바꿈 `<br>`), 구조 있는 다이어그램 → ```mermaid(`flowchart TD`/`LR`, 노드 라벨 큰따옴표 감싸기), 사진/차트 → `*[그림: 설명 + 캡션 원문]*`.
 - **페이지 서식(쪽 번호, 반복 머리글/바닥글, 워터마크 등)은 본문에 쓰지 않는다.** 대신 응답 마지막 줄에 `<!--PAGE {"num":"","header":"","footer":""}-->`로만 출력시키고(`PROMPT`의 "PAGE FURNITURE" 항목), 앱이 분리해 사용자 옵션(쪽 번호: 끔/원본/순번, 머리글, 바닥글 체크)에 따라서만 결과물에 기록한다. 기본값은 모두 끔. 이 줄은 `sessionStorage` 캐시에 원문 그대로 저장되므로 옵션 변경 시 API 재호출 없이 재생성(`rebuildFromCache`).
-- **배치 규칙**: 줄 단위 의미가 있는 글(시·대화·주소·목록)은 줄을 합치지 않고, 중앙/우측 정렬은 `<p align>`, 괘선 없는 열 나열(단어표·정답표·세로 계산)도 마크다운 표(헤더 없으면 빈 헤더 행)와 정렬 행(`:---:`)으로, 여러 줄 수식은 하나의 `$$\begin{aligned}…$$` 블록(번호는 `\tag`)으로 출력. 표 셀 안 수식의 `|`는 `\vert`.
-- 이미지 입력: 페이지 렌더 PDF는 Scale 2.0 + JPEG 0.85, 이미지 파일은 최대 변 2400px로 축소 후 JPEG 0.85.
+- **배치 규칙**: 줄 단위 의미가 있는 글(시·대화·주소·목록)은 줄을 합치지 않고, 중앙/우측 정렬은 `<p align>`, 괘선 없는 열 나열(단어표·정답표·세로 계산)도 마크다운 표(헤더 없으면 빈 헤더 행)와 정렬 행(`:---:`)으로, 여러 줄 수식은 하나의 `$$\begin{aligned}…$$` 블록(번호는 `\tag`)으로 출력. 표 셀 안 수식의 단일 세로선은 `\vert`/`\mid`(노름만 `\|`).
+- 이미지 입력: PDF는 기본 Scale 2.0을 기준으로 긴 변 1800px~2500px(최대 3.2배율) 적응형 스케일 + 흰색 배경 채움 후 JPEG 0.85, 이미지 파일은 최대 변 2400px 고품질 리사이즈 후 JPEG 0.85.
 
 ---
 
 ## 4. 렌더링 · 내보내기 파이프라인 (상세)
 
-1. **Markdown → HTML (`mdToHtml`)**: `marked`가 수식의 `_`, `*`를 서식으로 먹어 깨뜨리므로, `$$…$$`, `\[…\]`, `\(…\)`, `$…$`를 먼저 `@@MATH n@@`로 치환(코드 블록/인라인 코드 구간은 제외, `$5 and $6` 같은 금액은 수식으로 오인하지 않는 정규식) → `marked.parse` → `katex.renderToString(throwOnError:false)`로 복원. 실패 시 `<code>` 폴백.
-2. **Mermaid**: ` ```mermaid ` 블록을 `mermaid.render`로 SVG 치환. 실패하면 코드 블록 유지 + 로그 경고.
-3. **화면 밖 스테이지(`#stage`)** 에 페이지 HTML을 렌더 → `computePageCuts(stage, Hpx)`로 A4 경계 계산 → `html2canvas(scale 2)` 캡처 → 경계별 슬라이스를 A4 크기 캔버스(여백 12mm)에 올리고 옵션에 따라 머리글/바닥글/쪽 번호를 그려 JPEG(0.92)로 jsPDF에 추가. 메모리 보호를 위해 페이지 단위로 처리하고 즉시 해제. `Hpx = stage.offsetWidth * H / W` (본문 186×273mm, 여백 12mm).
+1. **Markdown → HTML (`mdToHtml`)**:
+   - 코드 펜스 밖에서 실수로 백틱에 감싸진 수식을 복원한 뒤, 코드 블록/인라인 코드를 제외한 구간에서 수식(`$$…$$`, `\[…\]`, `\(…\)`, `$…$`, 단독 `\begin{equation|align|aligned|gather|gathered|multline|eqnarray}`)을 `@@MATH n@@`로 보호(`replaceInlineDollarOnLine`으로 표 셀 경계 `|`와 통화 `$숫자` 오매칭 방지, 인용문 `>` 접두사와 표 행 내부 문맥 유지).
+   - 한국어·문장부호 인접 `***…***`/`**…**` CommonMark 누락 보정(`fixKoreanBold`) → 각주(`[^n]: …` / `[^n]`) 및 `<p align>` 분리 파싱(`marked.parseInline`) → `marked.parse({ gfm:true, breaks:true })` → `normalizeLatexForKatex`(`eqnarray`→`aligned`, `\bold`→`\mathbf` 등) 적용 후 KaTeX 치환.
+2. **Mermaid & 표 정리 (`renderPagesHtml`)**: `<thead>`의 모든 셀이 비어 있는 괘선 없는 열 나열 표는 빈 회색 `<thead>`를 제거. ` ```mermaid ` 블록을 `mermaid.render`로 SVG 치환하고, 1차 실패 시 `sanitizeMermaidCode`로 노드/엣지 라벨 큰따옴표 보정 후 1회 재시도(여전히 실패하면 코드 블록 유지 + 로그 경고).
+3. **화면 밖 스테이지(`#stage`)** 에 페이지 HTML을 렌더 → 폰트·이미지 로드 대기 후 `fitWideMath(stage)` 실행(`.katex-display > .katex`를 `inline-block` 실측해 넓은 디스플레이/인라인 수식 및 초과 폭 표의 글자·패딩을 비례 축소) → `computePageCuts(stage, Hpx)`로 A4 경계 계산 → `html2canvas(scale 2)` 캡처 → 경계별 슬라이스(`maxSliceH` 초과 행 분할 포함)를 A4 캔버스(여백 12mm)에 올리고 머리글/바닥글/쪽 번호 합성 후 JPEG(0.92)로 jsPDF에 추가. `Hpx = stage.offsetWidth * H / W` (본문 186×273mm, 여백 12mm).
 4. **`computePageCuts` 규칙**
-   - 표: 한 페이지에 들어가면 **경계에 걸릴 때 통째로 다음 페이지로 이동**. 한 페이지보다 긴 표는 **행 경계에서 끊고 `<thead>`를 복제해 다음 페이지 머리글로 반복**(`cloneNode`로 표 분할). 한 행이 페이지보다 크면 그 행에서만 강제 절단.
-   - 제목: 페이지 맨 아래에 홀로 남지 않도록 다음 내용과 함께 이동(`bottom+70 > limit`).
-   - 코드블록/그림/Mermaid/수식 블록/짧은 문단·목록(≈110px 이하): 쪼개지 않고 이동.
-   - 긴 문단/목록: 텍스트 줄·이미지 `getClientRects`를 피해 **글줄 사이**에서만 절단(`safeCut`, 못 찾으면 강제).
+   - 표: 한 페이지에 들어가면 **경계에 걸릴 때 통째로 다음 페이지로 이동**. 한 페이지보다 긴 표는 **행 경계에서 끊고 `<thead>`를 복제해 다음 페이지 머리글로 반복**(`cloneNode`로 표 분할, 분할 지점 상하 여백 정리). 한 행이 페이지보다 크면 그 행에서만 강제 절단(PDF 출력 시 `maxSliceH` 단위로 이어서 슬라이스).
+   - 제목: 연속 제목 체인 및 바로 다음 블록(표/그림 등)이 다음 페이지로 넘어가는 경우까지 함께 검사해 제목만 홀로 남지 않도록 동반 이동(`shouldKeepHeadingWithNext`).
+   - 코드블록/그림/Mermaid/수식 블록(`.katex-display` 포함)/짧은 문단·목록(≈110px 이하): 쪼개지 않고 이동.
+   - 긴 문단/목록: `.katex` 내부 조각 텍스트를 건너뛰고 `.katex-display`/`.katex`/`img`/`svg`/`pre`/`tr`를 원자 블록으로 보호한 `lineRects`를 피해 **글줄·수식 사이**에서만 절단(`safeCut`, 못 찾으면 강제).
    - 표가 통째로 넘어가면 앞 페이지 하단에 **여백이 생기는 것은 의도된 동작**.
 5. **5종 내보내기** (`#exportFormat`, 이름 입력칸에서 파일명 지정 후 다운로드):
    1. **PDF (`.pdf`)**: 페이지를 **이미지로 캡처해 만든 래스터 PDF**(글자 선택/확대 품질은 벡터보다 낮음). *벡터가 아님에 유의.*
@@ -188,8 +194,8 @@ pdf-vectorizer/
     - 과거 로컬 Flask 서버(`app.py`)/PyWebView GUI 런처(`gui_launcher.py`)/로컬 셸 스크립트/백업 등 불필요한 레거시 파일들을 `legacy/` 디렉토리로 격리 분류하여 웹 배포 루트를 `index.html`, `style.css`, `app.js` 중심으로 경량화 및 청정화.
     - 숨겨진 트리거(헤더 우측 `✦` 버튼 `#skinSecretBtn` — v1.5.0 초기엔 로고 클릭·`Alt+S` 포함이었으나 v1.5.5에서 비밀성 유지를 위해 제거)로 활성화되는 스킨 변경 모달 UI(`#skinModal`) 구현 및 `localStorage` 영구 보존.
     - **사이버펑크 2077 테마 (`data-theme="cyberpunk"`)**:
-      - 3D 원근 신스웨이브 격자 바닥 스크롤 애니메이션 + 나이트 시티 마천루 건물 실루엣 + 네온 선셋 태양.
-      - 45도 챔퍼(chamfered) 커팅 카드 + `// SYSTEM_NET // V.2077` 테크 라벨 + 사이버 옐로우(`#fcee0a`)/시안(`#00f0ff`)/마젠타(`#ff0055`) 시그니처 배색.
+      - 홀로그램 지평선 대기광 + 다층 메가스트럭처 마천루 스카이라인 + 3D 원근 텔레메트리 격자(6s 저속 스크롤)·CRT 비네팅.
+      - 대각선 챔퍼 컷(`clip-path` + 코너 엣지 스트로크)·카드별 마이크로 텔레메트리 태그(`SYS.AUTH // NODE_01` 등)·키로시 옵틱스 4코너 타겟팅 레티클 드롭존(`#drop`)·크로마틱 애버레이션 CTA 호버·혼합 폰트(`--cp-font`, 영문 고정폭+한글 맑은 고딕).
       - (v1.5.3 개선) 좌상단 로고의 번잡한 RGB 번짐과 꼬리표를 제거하고 선명한 일렉트릭 화이트/시안의 정돈된 모던 테크 타이포그래피로 자연스럽게 정돈.
       - 4번째 정보 카드(`geminiWaveCanvas`)가 사이버펑크 전용 네온 디지털 오실로스코프 파형으로 완전 변신(스퀘어/톱니파/스파이크 글리치).
     - **Google Gemini / AI Studio 테마 (`data-theme="gemini"`)**:
@@ -215,6 +221,29 @@ pdf-vectorizer/
     - **스텔라 리베리 (`stellar`) 고도화**:
       - `#stellarBgCanvas`를 성운 글로우(`.stellar-nebula-glow`) 상위 레이어(`z-index: 1`)로 정리하고, 3층 시차 별자리(7×4 격자 분산 앵커 별)·회전하는 천구 성도 아스트롤라베 호·부드러운 오목 4각 회절 성광(`drawFourPointStar`)·곡선 궤도 유성우와 이온화 별가루 잔상을 구현.
       - **성좌 필라멘트 직조(Constellation Weaver)**: 커서 주변 별들이 깨어나 샴페인-라벤더 필라멘트로 스스로 이어지고, 가장 가까운 별에 천체 레티클 호가 회전하며, 카드는 자개(Nacre) 진주광택 마스크 보더 리프랙션을 적용. `#geminiWaveCanvas`도 공전 하모닉 궤도 실선과 성광 다이아몬드 파형으로 개편.
+15. (2026-11-13) Google AI Studio / FactChat 모델 목록 분류·필터링·정렬 아키텍처 전면 개편:
+    - 기존의 전역 `.includes()` 키워드 매칭과 `FOUR_TIER_KEYWORDS` 강제 필터를 폐기하고, `/models` 원본 메타데이터(`fetchModelRecords` + `modelRecordMap`)를 보존한 **토큰 파서 + 제조사 스코프 규칙 + 제공사별 분리 파이프라인(`organizeModels`)** 으로 교체.
+    - **FactChat**: `live`/이미지/음성 등 사용 불가 모델만 제외하고 대부분 노출, `VENDOR_CATALOG` 기반 제조사 카테고리 내 저비용→초고비용 순(`Luna → Terra → Sol → Astra`, `Haiku → Sonnet → Opus → Fable`)으로 정렬.
+    - **Google AI Studio**: `parseGoogleCanonical`로 `-customtools`/`-cyber`/`-09-2025` 등 파생 접미사(`-xxxx`)와 구버전(`<=2.0`)을 배제하고 `Gemini 3.x` 세대교체 중간 체크포인트를 자동 정리(Gemini App 수준), 비용 등급 태그를 숨기고 세대·성능 순 및 `GOOGLE_ROLE_META` 역할 배지로 전환(초기 선택은 `pickDefaultModel`로 경량 모델 우선 보호).
+16. (2026-11-13) 커스텀 모델 피커·깔끔한 표시명·파생 모델 재정제·브랜드 SVG 로고 도입:
+    - **파생/비-OCR 모델 추가 차단**: Decisions API(`-decision`), 검색 전용(`-search-preview`), 코드/가드/과금 변종(`-codex`, `-guard`, `-batch`, `-flex`, `-priority`, `turbo-instruct`), 구세대 비-멀티모달(`GPT <4`, `Claude <3`, `Gemma <3`), FactChat 중복 `-preview`/`-chat-latest`를 추가 배제(오픈웨이트 `-instruct` 비전·채팅 모델은 정상 유지).
+    - **깔끔한 사람 친화 표시명 (`formatModelDisplayName` / `buildUniqueDisplayMap`)**: 목록과 트리거에 원시 API 코드 대신 정제된 모델명(`GPT-6 Luna`, `Gemini 3.5 Flash-Lite`, `Claude Sonnet 5.5`, `Gemini 3.1 Pro` + `Preview` 배지 등)을 표시하고, 배지 툴팁(`#ttId`)에서 정확한 API 모델 ID를 확인 가능하게 분리.
+    - **정렬 불균형 해소 & 제조사 SVG 로고 (`#modelPicker` / `#modelPickerMenu` · `VENDOR_LOGOS`)**: 가변 폭 `[등급]` 프리픽스를 제거해 모든 모델명을 좌측 수직선으로 일렬 정렬하고, FactChat 비용 등급 알약(`.mp-pill`)을 우측 고정폭 열에 배치. 각 카테고리 헤더와 트리거에 제조사별 정적 인라인 SVG 로고(`openai`, `anthropic`, `gemini`, `gemma`, `xai`, `deepseek`, `alibaba`, `meta`, `mistral`, `other`)를 추가했으며 `body` 포탈 + 6종 전 스킨 스타일 오버라이드로 `gemini`/`cyberpunk` 카드 클리핑과 `twilight` 버튼 스타일 충돌까지 해결.
+    - **제조사 판별 우선순위 교정 (`resolveVendor` / `parseModelRecord`)**: `flash` 같은 범용 티어 토큰이 `deepseek`/`qwen`보다 먼저 `'google'`로 납치되거나 다중 `/` 경로·`.` 구분자 ID에서 `owned_by: 'google'` 힌트에 삼켜지던 문제를 해결해 선두 패밀리명 → ID 브랜드 토큰(`lastIndexOf('/')`, `.` 포함 분리) → 고유 코드명(`flash` 제외) → `owned_by` 순으로 재정렬.
+17. (2026-11-13) 전 벤더 세대 정리·내부 정렬 일원화 & 브랜드 공식 SVG 로고 전면 교체 (`VENDOR_LOGOS` · `pruneFactChatLineage` · `compareFactChatModels`):
+    - **공식 브랜드 SVG 로고 (`VENDOR_LOGOS`)**: 임시 도형이던 `openai`, `gemma`, `xai`, `deepseek`, `alibaba`, `meta`, `mistral` SVG를 `@lobehub/icons-static-svg` 공식 경로(`currentColor`)로 교체.
+    - **전 벤더 세대교체 pruning (`pruneFactChatLineage`)**: `GPT-6` 존재 시 `GPT-5.x`/`4.x`/`o-series` 제거, `Claude 5.x` 존재 시 `Claude Opus 4.6` 포함 `4.x/3.x` 제거, `Grok`/`Qwen`/`Llama`/`DeepSeek` 구세대 및 동일 역할 구형 마이너(`3.6/3.7-flash` vs `3.8-flash` 등) 자동 정리.
+    - **Google 내부 정렬·가격 메타 분리 (`classifyModelTier` · `compareFactChatModels`)**: API `pricing`이 `subRank`를 덮어써 `Gemma 4`/`3`가 갈라지고 `Gemini` 세대가 섞이던 문제를 해결해 FactChat `google` 그룹을 `Gemini`(경량·저비용→플래그십·고비용 순: `3.5 flash-lite → 3.8 flash → 4 hydrogen → 4 argon → 4 carbon`) 상단 + `Gemma`(`4→3`, 파라미터 내림차순) 하단으로 고정 정렬.
+18. (2026-11-13) UI 균형·가독성·스킨 완성도 개선 (`style.css`, `index.html`):
+    - **API 상태 배지(`#apiStatusBadge`) 규격·스킨 조화**: 입력칸(`#apiKeyInput`)·모델 피커(`#modelPickerBtn`)·병렬 선택(`#concurrencySelect`)과 높이를 맞추고(`min-height: 37px`), 6종 스킨별 모서리/재질/차분한 상태 배색을 개별 적용해 이질감을 제거.
+    - **킨츠기 잉크·스텔라 모델 피커 가독성 복원**: 테마별 기본 CTA `button` 규칙이 `button.mp-trigger`/`button.mp-option`을 덮어쓰던 CSS 명시도 충돌(`:not(.mp-trigger):not(.mp-option)` 누락)을 전 스킨에서 차단하고, 킨츠기 잉크(`kintsugi`) 전용 우루시 칠기 배경·금박 테두리·아이보리 텍스트 드롭다운 스타일을 명시.
+    - **트와일라잇(`twilight`) 테마 고도화**: 단일 연보라-포슬린 베이스(`#e6e8f2`) 위에 4면 이색 테두리 대신 둥근 모서리를 감싸는 부드러운 광택·음영과 3단 입체 위계(부유 카드 `.card` · 음각 입력 웰 · 플랫 인레이 `.box`/`#apiStatusBadge` · 단일 인디고-라벤더 포컬 포인트)로 절제된 고급스러움을 살리고, 좌우 패딩(`14px`)·컨트롤 높이(`37px`)를 통일해 행 개행 문제를 해소.
+    - **사이버펑크(`cyberpunk`) 테마 HUD·배경·타이포그래피 고도화**: 원색 신스웨이브 태양·빠른 그리드·굴림 폴백 대신 Night City 지평선 홀로그램 블룸·다층 메가빌딩 실루엣·6초 저속 원근 그리드·CRT 비네팅 스캔라인으로 배경을 다듬고, `--cp-font` 폰트 스택과 45도 모따기 대각 스트로크 카드·영역별 텔레메트리 라벨(`SYS.AUTH // NODE_01` 등)·4코너 Kiroshi 타게팅 레티클 `#drop`·색수차 CTA 호버를 적용하면서 `.card` 패딩(`14px`)과 컨트롤 높이(`37px`)를 유지.
+19. (2026-11-16, v1.6.0) OCR 판독·마크다운 변환·A4 분할 파이프라인 정확도 및 안정성 고도화 (`app.js`):
+    - **PDF/이미지 입력 전처리 (`renderPageJpeg`, `renderImageFileJpeg`)**: PDF 적응형 스케일(긴 변 1800~2500px, 최대 3.2배율)과 흰색 배경 채움으로 투명 배경 흑화·소형 페이지 저해상도·초고해상도 메모리 폭증을 차단하고, 이미지 리사이즈에 고품질 보간(`imageSmoothingQuality: 'high'`)을 적용.
+    - **API 통신·응답 정제 (`callApi`, `unwrapOuterMarkdownFence`, `PROMPT`)**: JSON 파싱·HTTP 200 래핑 오류·빈 응답 재시도, `temperature: 0` 미지원 모델 자동 폴백, `<!--PAGE ...-->` 주석이 붙은 외곽 ```` ```markdown ```` 펜스 안전 제거(복수 코드 블록 오손 방지), 프롬프트 문장 연속성·인라인 수식 공백·Mermaid 라벨 따옴표 지침 보완.
+    - **페이지 서식 & 마크다운 파서 (`splitPageMeta`, `stripFurniture`, `mdToHtml`, `renderPagesHtml`)**: `<!--PAGE-->` 따옴표 손상 시 정규식 폴백, `isBlockMarkdownLine` 교정으로 `**굵은 머리글**`·고립 쪽 번호 정상 분리, 통화 `$숫자`·표 셀 `|`와 인라인 수식 충돌 해결, 인용문(`>`)·표 내부 `$$...$$` 및 단독 `\begin{...}`·`eqnarray` 복원, 한국어·문장부호 인접 `**...**` 보정, `<p align>` 내부 마크다운·각주(`[^n]`) 정식 렌더링, 빈 `<thead>` 제거 및 Mermaid 라벨 정제 재시도.
+    - **폭 축소·분할·출력 (`fitWideMath`, `computePageCuts`, `makeOutputsFromPages`, `updateExportFormatUI`)**: `.katex-display > .katex`의 `inline-block` 실측으로 무작동하던 넓은 수식·표 축소 복구, `lineRects` 수식 원자 보호 및 연속 제목·다음 블록 동반 이동으로 수식/제목 절단 방지, `maxSliceH` 초과 행 분할 보호 및 PDF 실제 분할 페이지 수 표시.
 
 ---
 

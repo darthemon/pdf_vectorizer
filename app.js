@@ -9,6 +9,7 @@ const MODEL_TIERS = {
   flash: {
     grade: 1,
     prefix: '[🟢추천]',
+    shortBadge: '🟢 추천',
     badge: '🟢 저비용 모델 · 추천',
     badgeColor: '#10b981',
     tooltip: '경량 모델입니다. 속도가 빠르고 소모되는 크레딧이 적습니다.',
@@ -20,6 +21,7 @@ const MODEL_TIERS = {
   standard: {
     grade: 2,
     prefix: '[🔵표준]',
+    shortBadge: '🔵 표준',
     badge: '🔵 표준 모델',
     badgeColor: '#3b82f6',
     tooltip: '적당한 성능과 비용을 갖춘 밸런스가 뛰어난 모델입니다.',
@@ -31,6 +33,7 @@ const MODEL_TIERS = {
   high: {
     grade: 3,
     prefix: '[🟠고비용]',
+    shortBadge: '🟠 고비용',
     badge: '🟠 고비용 모델',
     badgeColor: '#f59e0b',
     tooltip: '고비용 모델입니다. 저비용 모델보다 약 8~10배 많은 크레딧이 차감됩니다.',
@@ -43,6 +46,7 @@ const MODEL_TIERS = {
   ultra: {
     grade: 4,
     prefix: '[🔴초고비용]',
+    shortBadge: '🔴 초고비용',
     badge: '🔴 초고비용 모델',
     badgeColor: '#ef4444',
     tooltip: '초고비용 모델입니다. 과도하게 많은 크레딧이 소모될 수 있어 사용을 권장하지 않습니다.',
@@ -54,19 +58,15 @@ const MODEL_TIERS = {
   }
 };
 
-function getModelMeta(modelId) {
-  const l = String(modelId || '').toLowerCase();
-  // 1. 초고비용 (astra, fable)
-  if (l.includes('astra') || l.includes('fable') || l.includes('carbon')) return MODEL_TIERS.ultra;
-  // 2. 고비용 (sol, opus, argon)
-  if (l.includes('sol') || l.includes('opus') || l.includes('argon')) return MODEL_TIERS.high;
-  // 3. 표준 (sonnet, terra, pro, gemma)
-  if (l.includes('sonnet') || l.includes('terra') || l.includes('pro')) return MODEL_TIERS.standard;
-  // 4. 저비용 · 추천 (flash, haiku)
-  if (l.includes('flash') || l.includes('haiku') || l.includes('luna') || l.includes('gemma')) return MODEL_TIERS.flash;
-  // fallback: 표준 모델
-  return MODEL_TIERS.standard;
-}
+const GOOGLE_ROLE_META = {
+  gen4_ultra:     { badge: '✦ Gemini 4 · 최상위 추론', badgeColor: '#8b5cf6', tooltip: '심층 추론과 고난도 수식·구조 복원에 최적화된 최상위 Gemini 4 모델입니다.' },
+  gen4_high:      { badge: '✦ Gemini 4 · 고성능 균형',  badgeColor: '#6366f1', tooltip: '긴 문맥과 복잡한 기술 문서 OCR에 강한 고성능 Gemini 4 모델입니다.' },
+  gen4_workhorse: { badge: '⚡ Gemini 4 · 고속 범용',   badgeColor: '#3b82f6', tooltip: '빠른 응답 속도와 높은 정확도를 겸비한 Gemini 4 범용 모델입니다.' },
+  pro:            { badge: '◆ Gemini Pro · 고정밀',     badgeColor: '#3b82f6', tooltip: '복잡한 표·다단 레이아웃·수식 복원에 강점이 있는 정밀 Gemini Pro 모델입니다.' },
+  flash:          { badge: '⚡ Gemini Flash · 고속 추천', badgeColor: '#10b981', tooltip: '대량 문서 OCR 변환에 최적화된 빠르고 효율적인 Gemini 경량 모델입니다.' },
+  gemma:          { badge: '💎 Gemma · 오픈 멀티모달',   badgeColor: '#14b8a6', tooltip: 'Google AI Studio에서 제공하는 경량 오픈 멀티모달 모델입니다.' },
+  default:        { badge: '✦ Google AI Studio',       badgeColor: '#3b82f6', tooltip: 'Google AI Studio Gemini API 모델입니다.' }
+};
 
 const SEC_PER_PAGE = m => getModelMeta(m).secPerPage;
 const fmtInt = n => Math.round(n).toLocaleString('en-US');
@@ -80,20 +80,43 @@ function estimateCredit(pages, model) {
 }
 
 function updateModelBadgeAndTooltip(model) {
-  const meta = getModelMeta(model);
+  const hasModel = Boolean(model);
+  const meta = getModelMeta(model || DEFAULT_MODEL);
+  const isGoogle = activeProvider === 'google';
+  const uiMeta = isGoogle ? getGoogleDisplayMeta(model || DEFAULT_MODEL) : meta;
+
   const badge = $('modelBadge');
   if (badge) {
-    badge.textContent = meta.badge;
-    badge.style.background = meta.badgeColor + '22';
-    badge.style.color = meta.badgeColor;
-    badge.style.border = `1px solid ${meta.badgeColor}`;
+    if (!hasModel) {
+      badge.textContent = '● 모델 선택';
+      badge.style.background = '';
+      badge.style.color = '';
+      badge.style.border = '';
+    } else {
+      badge.textContent = uiMeta.badge;
+      badge.style.background = uiMeta.badgeColor + '22';
+      badge.style.color = uiMeta.badgeColor;
+      badge.style.border = `1px solid ${uiMeta.badgeColor}`;
+    }
+  }
+  const ttId = $('ttId');
+  if (ttId) {
+    if (hasModel) {
+      ttId.textContent = `API: ${model}`;
+      ttId.classList.remove('hidden');
+    } else {
+      ttId.textContent = '';
+      ttId.classList.add('hidden');
+    }
   }
   const ttDesc = $('ttDesc');
   const ttCost = $('ttCost');
-  if (ttDesc) ttDesc.textContent = meta.tooltip;
+  if (ttDesc) ttDesc.textContent = hasModel ? uiMeta.tooltip : 'API 키를 입력하면 사용 가능한 모델이 자동으로 불러와집니다.';
   if (ttCost) {
-    if (activeProvider === 'google') {
-      ttCost.textContent = `⚡ 초당 약 ${meta.secPerPage}초/p 고속 처리 · 토큰 기반 변환`;
+    if (!hasModel) {
+      ttCost.textContent = '';
+    } else if (isGoogle) {
+      ttCost.textContent = `⚡ 페이지당 약 ${meta.secPerPage}초 · 토큰 기반 변환`;
     } else {
       const estPerPage = Math.round((0.65 * meta.creditPer1kInput + 1.1 * meta.creditPer1kOutput) * 10) / 10;
       ttCost.textContent = `⚡ 페이지당 약 ${estPerPage} 크레딧 차감 (1k토큰당 입: ${meta.creditPer1kInput} / 출: ${meta.creditPer1kOutput})`;
@@ -102,7 +125,7 @@ function updateModelBadgeAndTooltip(model) {
 
   const warn = $('costWarn');
   if (warn) {
-    if (meta.warn && activeProvider !== 'google') {
+    if (hasModel && meta.warn && !isGoogle) {
       warn.textContent = meta.warnText;
       warn.classList.remove('hidden');
     } else {
@@ -120,120 +143,827 @@ const state = { key:'', model:DEFAULT_MODEL, conc:'4', pgNum:'off', pgHeader:fal
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS)||'{}')); } catch(e){}
 const save = () => localStorage.setItem(LS, JSON.stringify(state));
 
-/* ---------- 모델 필터 및 정렬 ---------- */
-const VENDORS = [
-  ['Anthropic (Claude)', /claude/],
-  ['OpenAI (GPT)',       /gpt|chatgpt|(^|[-_/])o[134](-|$)/],
-  ['Google (Gemini/Gemma)', /gemini|gemma/],
-  ['xAI (Grok)',         /grok/],
-  ['DeepSeek',           /deepseek/],
-  ['Meta (Llama)',       /llama/],
-  ['Mistral',            /mistral|mixtral|codestral/],
-  ['Alibaba (Qwen)',     /qwen/]
+/* ---------- 통합 모델 메타·토큰 파서 & 제공사별 분류 ---------- */
+const modelRecordMap = new Map();
+
+const VENDOR_CATALOG = [
+  { key: 'openai',    label: 'OpenAI · GPT' },
+  { key: 'anthropic', label: 'Anthropic · Claude' },
+  { key: 'google',    label: 'Google · Gemini & Gemma' },
+  { key: 'xai',       label: 'xAI · Grok' },
+  { key: 'deepseek',  label: 'DeepSeek' },
+  { key: 'alibaba',   label: 'Alibaba · Qwen' },
+  { key: 'meta',      label: 'Meta · Llama' },
+  { key: 'mistral',   label: 'Mistral' },
+  { key: 'other',     label: '기타 모델' }
 ];
-const OTHER_VENDOR = '기타';
-const vendorOf = id => { const l = id.toLowerCase(); const v = VENDORS.find(([,re]) => re.test(l)); return v ? v[0] : OTHER_VENDOR; };
-function perfScore(id){
-  const l = id.toLowerCase();
-  let tier = 3;
-  if (/mini|nano|lite|haiku|small|gemma|\b8b\b/.test(l)) tier = 1;
-  else if (/flash|turbo/.test(l)) tier = 2;
-  else if (/opus|ultra|pro|gpt-5|(^|[-_/])o[134](-|$)|large|max/.test(l)) tier = 4;
-  let ver = 0;
-  for (const m of l.matchAll(/(\d{1,2})(?:[.-](\d{1,2}))?(?!\d)/g)){
-    const v = parseFloat(m[1] + (m[2] ? '.'+m[2] : ''));
-    if (v < 20) { ver = v; break; }
-  }
-  const date = parseInt((l.match(/(20\d{6})/)||[])[1] || 0, 10) / 1e9;
-  return tier*100 + ver + date;
+const VENDOR_RANK = Object.fromEntries(VENDOR_CATALOG.map((v, i) => [v.key, i]));
+const VENDOR_LABEL = Object.fromEntries(VENDOR_CATALOG.map(v => [v.key, v.label]));
+
+/* 제조사·패밀리 정적 SVG 브랜드 로고 (외부 입력 미삽입 · defs ID 미사용) */
+const VENDOR_LOGOS = {
+  openai: '<svg viewBox="0 0 24 24" fill="#10a37f" fill-rule="evenodd"><path d="M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 00-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 01.476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 014.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 01-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 005.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0010.205 0a5.947 5.947 0 00-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 004.162 1.713z"/></svg>',
+  anthropic: '<svg viewBox="0 0 24 24" fill="none" stroke="#d97757" stroke-width="2" stroke-linecap="round"><path d="M12 3.2v17.6M3.2 12h17.6M5.8 5.8l12.4 12.4M18.2 5.8L5.8 18.2"/><circle cx="12" cy="12" r="2.3" fill="#d97757" stroke="none"/></svg>',
+  gemini: '<svg viewBox="0 0 24 24" fill="none"><path d="M11.5 2.5C11.5 7.7 15.8 12 21 12C15.8 12 11.5 16.3 11.5 21.5C11.5 16.3 7.2 12 2 12C7.2 12 11.5 7.7 11.5 2.5Z" fill="#60a5fa"/><path d="M18.5 2.5C18.5 4.4 20 5.9 21.8 5.9C20 5.9 18.5 7.4 18.5 9.3C18.5 7.4 17 5.9 15.2 5.9C17 5.9 18.5 4.4 18.5 2.5Z" fill="#a78bfa"/></svg>',
+  gemma: '<svg viewBox="0 0 24 24" fill="#2E96FF" fill-rule="evenodd"><path d="M12.34 5.953a8.233 8.233 0 01-.247-1.125V3.72a8.25 8.25 0 015.562 2.232H12.34zm-.69 0c.113-.373.199-.755.257-1.145V3.72a8.25 8.25 0 00-5.562 2.232h5.304zm-5.433.187h5.373a7.98 7.98 0 01-.267.696 8.41 8.41 0 01-1.76 2.65L6.216 6.14zm-.264-.187H2.977v.187h2.915a8.436 8.436 0 00-2.357 5.767H0v.186h3.535a8.436 8.436 0 002.357 5.767H2.977v.186h2.976v2.977h.187v-2.915a8.436 8.436 0 005.767 2.357V24h.186v-3.535a8.436 8.436 0 005.767-2.357v2.915h.186v-2.977h2.977v-.186h-2.915a8.436 8.436 0 002.357-5.767H24v-.186h-3.535a8.436 8.436 0 00-2.357-5.767h2.915v-.187h-2.977V2.977h-.186v2.915a8.436 8.436 0 00-5.767-2.357V0h-.186v3.535A8.436 8.436 0 006.14 5.892V2.977h-.187v2.976zm6.14 14.326a8.25 8.25 0 005.562-2.233H12.34c-.108.367-.19.743-.247 1.126v1.107zm-.186-1.087a8.015 8.015 0 00-.258-1.146H6.345a8.25 8.25 0 005.562 2.233v-1.087zm-8.186-7.285h1.107a8.23 8.23 0 001.125-.247V6.345a8.25 8.25 0 00-2.232 5.562zm1.087.186H3.72a8.25 8.25 0 002.232 5.562v-5.304a8.012 8.012 0 00-1.145-.258zm15.47-.186a8.25 8.25 0 00-2.232-5.562v5.315c.367.108.743.19 1.126.247h1.107zm-1.086.186c-.39.058-.772.144-1.146.258v5.304a8.25 8.25 0 002.233-5.562h-1.087zm-1.332 5.69V12.41a7.97 7.97 0 00-.696.267 8.409 8.409 0 00-2.65 1.76l3.346 3.346zm0-6.18v-5.45l-.012-.013h-5.451c.076.235.162.468.26.696a8.698 8.698 0 001.819 2.688 8.698 8.698 0 002.688 1.82c.228.097.46.183.696.259zM6.14 17.848V12.41c.235.078.468.167.696.267a8.403 8.403 0 012.688 1.799 8.404 8.404 0 011.799 2.688c.1.228.19.46.267.696H6.152l-.012-.012zm0-6.245V6.326l3.29 3.29a8.716 8.716 0 01-2.594 1.728 8.14 8.14 0 01-.696.259zm6.257 6.257h5.277l-3.29-3.29a8.716 8.716 0 00-1.728 2.594 8.135 8.135 0 00-.259.696zm-2.347-7.81a9.435 9.435 0 01-2.88 1.96 9.14 9.14 0 012.88 1.94 9.14 9.14 0 011.94 2.88 9.435 9.435 0 011.96-2.88 9.14 9.14 0 012.88-1.94 9.435 9.435 0 01-2.88-1.96 9.434 9.434 0 01-1.96-2.88 9.14 9.14 0 01-1.94 2.88z"/></svg>',
+  google: '<svg viewBox="0 0 24 24" fill="none"><path d="M11.5 2.5C11.5 7.7 15.8 12 21 12C15.8 12 11.5 16.3 11.5 21.5C11.5 16.3 7.2 12 2 12C7.2 12 11.5 7.7 11.5 2.5Z" fill="#60a5fa"/><path d="M18.5 2.5C18.5 4.4 20 5.9 21.8 5.9C20 5.9 18.5 7.4 18.5 9.3C18.5 7.4 17 5.9 15.2 5.9C17 5.9 18.5 4.4 18.5 2.5Z" fill="#a78bfa"/></svg>',
+  xai: '<svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd"><path d="M9.27 15.29l7.978-5.897c.391-.29.95-.177 1.137.272.98 2.369.542 5.215-1.41 7.169-1.951 1.954-4.667 2.382-7.149 1.406l-2.711 1.257c3.889 2.661 8.611 2.003 11.562-.953 2.341-2.344 3.066-5.539 2.388-8.42l.006.007c-.983-4.232.242-5.924 2.75-9.383.06-.082.12-.164.179-.248l-3.301 3.305v-.01L9.267 15.292M7.623 16.723c-2.792-2.67-2.31-6.801.071-9.184 1.761-1.763 4.647-2.483 7.166-1.425l2.705-1.25a7.808 7.808 0 00-1.829-1A8.975 8.975 0 005.984 5.83c-2.533 2.536-3.33 6.436-1.962 9.764 1.022 2.487-.653 4.246-2.34 6.022-.599.63-1.199 1.259-1.682 1.925l7.62-6.815"/></svg>',
+  deepseek: '<svg viewBox="0 0 24 24" fill="#4D6BFE"><path d="M23.748 4.482c-.254-.124-.364.113-.512.234-.051.039-.094.09-.137.136-.372.397-.806.657-1.373.626-.829-.046-1.537.214-2.163.848-.133-.782-.575-1.248-1.247-1.548-.352-.156-.708-.311-.955-.65-.172-.241-.219-.51-.305-.774-.055-.16-.11-.323-.293-.35-.2-.031-.278.136-.356.276-.313.572-.434 1.202-.422 1.84.027 1.436.633 2.58 1.838 3.393.137.093.172.187.129.323-.082.28-.18.552-.266.833-.055.179-.137.217-.329.14a5.526 5.526 0 01-1.736-1.18c-.857-.828-1.631-1.742-2.597-2.458a11.365 11.365 0 00-.689-.471c-.985-.957.13-1.743.388-1.836.27-.098.093-.432-.779-.428-.872.004-1.67.295-2.687.684a3.055 3.055 0 01-.465.137 9.597 9.597 0 00-2.883-.102c-1.885.21-3.39 1.102-4.497 2.623C.082 8.606-.231 10.684.152 12.85c.403 2.284 1.569 4.175 3.36 5.653 1.858 1.533 3.997 2.284 6.438 2.14 1.482-.085 3.133-.284 4.994-1.86.47.234.962.327 1.78.397.63.059 1.236-.03 1.705-.128.735-.156.684-.837.419-.961-2.155-1.004-1.682-.595-2.113-.926 1.096-1.296 2.746-2.642 3.392-7.003.05-.347.007-.565 0-.845-.004-.17.035-.237.23-.256a4.173 4.173 0 001.545-.475c1.396-.763 1.96-2.015 2.093-3.517.02-.23-.004-.467-.247-.588zM11.581 18c-2.089-1.642-3.102-2.183-3.52-2.16-.392.024-.321.471-.235.763.09.288.207.486.371.739.114.167.192.416-.113.603-.673.416-1.842-.14-1.897-.167-1.361-.802-2.5-1.86-3.301-3.307-.774-1.393-1.224-2.887-1.298-4.482-.02-.386.093-.522.477-.592a4.696 4.696 0 011.529-.039c2.132.312 3.946 1.265 5.468 2.774.868.86 1.525 1.887 2.202 2.891.72 1.066 1.494 2.082 2.48 2.914.348.292.625.514.891.677-.802.09-2.14.11-3.054-.614zm1-6.44a.306.306 0 01.415-.287.302.302 0 01.2.288.306.306 0 01-.31.307.303.303 0 01-.304-.308zm3.11 1.596c-.2.081-.399.151-.59.16a1.245 1.245 0 01-.798-.254c-.274-.23-.47-.358-.552-.758a1.73 1.73 0 01.016-.588c.07-.327-.008-.537-.239-.727-.187-.156-.426-.199-.688-.199a.559.559 0 01-.254-.078c-.11-.054-.2-.19-.114-.358.028-.054.16-.186.192-.21.356-.202.767-.136 1.146.016.352.144.618.408 1.001.782.391.451.462.576.685.914.176.265.336.537.445.848.067.195-.019.354-.25.452z"/></svg>',
+  alibaba: '<svg viewBox="0 0 24 24" fill="#615CED" fill-rule="evenodd"><path d="M19.713 2.825h-5.907c0-.251-.066-.503-.196-.728L12.819.728A1.46 1.46 0 0 0 11.559 0h-1.58c-.52 0-1 .275-1.26.728l-2.42 4.19a1.45 1.45 0 0 0 0 1.453l.791 1.37c.26.448.74.727 1.26.727h11.36c.52 0 1-.275 1.26-.728l.79-1.37a1.45 1.45 0 0 0 0-1.451l-.79-1.37a1.46 1.46 0 0 0-1.26-.728zM.195 9.905l2.951 5.115a1.46 1.46 0 0 0-.531.531l-.791 1.37a1.45 1.45 0 0 0 0 1.452l.79 1.37c.26.448.74.727 1.26.727h4.84c.52 0 1-.275 1.26-.728l.79-1.37a1.45 1.45 0 0 0 0-1.451L5.086 7.083a1.46 1.46 0 0 0-1.26-.728h-1.58c-.52 0-1 .276-1.26.728l-.79 1.37a1.45 1.45 0 0 0 0 1.452m15.888 13.367 2.951-5.115c.217.125.469.196.728.196h1.582c.52 0 1-.275 1.26-.728l.79-1.37a1.45 1.45 0 0 0 0-1.451l-2.42-4.191a1.46 1.46 0 0 0-1.259-.728h-1.582c-.52 0-1 .276-1.259.728l-5.678 9.838a1.45 1.45 0 0 0 0 1.452l.79 1.37c.26.448.74.727 1.26.727h1.582c.52 0 1-.275 1.26-.728z"/></svg>',
+  meta: '<svg viewBox="0 0 24 24" fill="#0082FB" fill-rule="evenodd"><path d="M6.897 4c1.915 0 3.516.932 5.43 3.376l.282-.373c.19-.246.383-.484.58-.71l.313-.35C14.588 4.788 15.792 4 17.225 4c1.273 0 2.469.557 3.491 1.516l.218.213c1.73 1.765 2.917 4.71 3.053 8.026l.011.392.002.25c0 1.501-.28 2.759-.818 3.7l-.14.23-.108.153c-.301.42-.664.758-1.086 1.009l-.265.142-.087.04a3.493 3.493 0 01-.302.118 4.117 4.117 0 01-1.33.208c-.524 0-.996-.067-1.438-.215-.614-.204-1.163-.56-1.726-1.116l-.227-.235c-.753-.812-1.534-1.976-2.493-3.586l-1.43-2.41-.544-.895-1.766 3.13-.343.592C7.597 19.156 6.227 20 4.356 20c-1.21 0-2.205-.42-2.936-1.182l-.168-.184c-.484-.573-.837-1.311-1.043-2.189l-.067-.32a8.69 8.69 0 01-.136-1.288L0 14.468c.002-.745.06-1.49.174-2.23l.1-.573c.298-1.53.828-2.958 1.536-4.157l.209-.34c1.177-1.83 2.789-3.053 4.615-3.16L6.897 4zm-.033 2.615l-.201.01c-.83.083-1.606.673-2.252 1.577l-.138.199-.01.018c-.67 1.017-1.185 2.378-1.456 3.845l-.004.022a12.591 12.591 0 00-.207 2.254l.002.188c.004.18.017.36.04.54l.043.291c.092.503.257.908.486 1.208l.117.137c.303.323.698.492 1.17.492 1.1 0 1.796-.676 3.696-3.641l2.175-3.4.454-.701-.139-.198C9.11 7.3 8.084 6.616 6.864 6.616zm10.196-.552l-.176.007c-.635.048-1.223.359-1.82.933l-.196.198c-.439.462-.887 1.064-1.367 1.807l.266.398c.18.274.362.56.55.858l.293.475 1.396 2.335.695 1.114c.583.926 1.03 1.6 1.408 2.082l.213.262c.282.326.529.54.777.673l.102.05c.227.1.457.138.718.138.176.002.35-.023.518-.073.338-.104.61-.32.813-.637l.095-.163.077-.162c.194-.459.29-1.06.29-1.785l-.006-.449c-.08-2.871-.938-5.372-2.2-6.798l-.176-.189c-.67-.683-1.444-1.074-2.27-1.074z"/></svg>',
+  mistral: '<svg viewBox="0 0 24 24"><path d="M3.428 3.4h3.429v3.428H3.428V3.4zm13.714 0h3.43v3.428h-3.43V3.4z" fill="#FFD800"/><path d="M3.428 6.828h6.857v3.429H3.429V6.828zm10.286 0h6.857v3.429h-6.857V6.828z" fill="#FFAF00"/><path d="M3.428 10.258h17.144v3.428H3.428v-3.428z" fill="#FF8205"/><path d="M3.428 13.686h3.429v3.428H3.428v-3.428zm6.858 0h3.429v3.428h-3.429v-3.428zm6.856 0h3.43v3.428h-3.43v-3.428z" fill="#FA500F"/><path d="M0 17.114h10.286v3.429H0v-3.429zm13.714 0H24v3.429H13.714v-3.429z" fill="#E10500"/></svg>',
+  other: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><polygon points="12 3 20 7.5 20 16.5 12 21 4 16.5 4 7.5"/><circle cx="12" cy="12" r="2.1" fill="currentColor" stroke="none"/></svg>'
+};
+
+const UNUSABLE_TOKENS = new Set([
+  'tts', 'whisper', 'stt', 'audio', 'voice', 'live', 'realtime', 'dialog',
+  'music', 'imagen', 'flux', 'midjourney', 'diffusion', 'sdxl', 'ideogram',
+  'recraft', 'firefly', 'sora', 'veo', 'kling', 'runway', 'luma', 'pika',
+  'hailuo', 'seedance', 'seedream', 'suno', 'udio', 'lyria', 'wan',
+  'moderation', 'robotics', 'customtools', 'cyber', 'aqa', 'learnlm',
+  'shieldgemma', 'codegemma', 'recurrentgemma', 'paligemma', 'pt',
+  'image', 'video', 'banana',
+  // 의미 없는 비-OCR 파생·전용 엔드포인트 토큰
+  'decision', 'decisions', 'search', 'research', 'transcribe', 'translate',
+  'codex', 'codestral', 'devstral', 'coder',
+  'guard', 'shield', 'safeguard', 'reward', 'eval', 'judge', 'classifier',
+  'batch', 'flex', 'priority', 'cached', 'computer', 'operator', 'cua',
+  'babbage', 'davinci', 'curie', 'ada', 'exp', 'experimental', 'thinking'
+]);
+const UNUSABLE_COMPOUND_RE = /embed|rerank|transcri|dall[-_]?e|gpt-image|stable-?image|native-audio|computer-use|deep-research|nano-banana|omni-moderation|text-moderation|realtime-preview|turbo-instruct|code-search/;
+const GOOGLE_NOISE_TOKENS = new Set([
+  'latest', 'exp', 'experimental', 'thinking', 'tuning', 'tuned',
+  'search', 'research', 'translate', 'antigravity'
+]);
+
+const normalizeModelId = input => {
+  const rawId = typeof input === 'string' ? input : (input?.id || input?.name || '');
+  return String(rawId).replace(/^models\//, '').trim();
+};
+
+function resolveVendor(ownedBy, namespace, shortId, tokenSet, wordSet) {
+  const words = wordSet || tokenSet;
+  // 1순위: 모델 ID 선두 패밀리명 (가장 확실한 제조사 판별)
+  if (/^claude/.test(shortId)) return 'anthropic';
+  if (/^(gemini|gemma|imagen|veo|learnlm|aqa)/.test(shortId)) return 'google';
+  if (/^(gpt|chatgpt|sora|dall|whisper|o[1345](?:$|-|\.))/.test(shortId)) return 'openai';
+  if (/^grok/.test(shortId)) return 'xai';
+  if (/^deepseek/.test(shortId)) return 'deepseek';
+  if (/^qwen/.test(shortId)) return 'alibaba';
+  if (/^llama/.test(shortId)) return 'meta';
+  if (/^(mistral|mixtral|pixtral|codestral|ministral)/.test(shortId)) return 'mistral';
+
+  // 2순위: 리전·리셀러 접두사가 붙은 ID 내부의 브랜드 토큰 (예: us.deepseek.r1, vertex-deepseek)
+  if (words.has('claude')) return 'anthropic';
+  if (words.has('gemini') || words.has('gemma')) return 'google';
+  if (words.has('gpt') || words.has('chatgpt')) return 'openai';
+  if (words.has('grok')) return 'xai';
+  if (words.has('deepseek')) return 'deepseek';
+  if (words.has('qwen')) return 'alibaba';
+  if (words.has('llama')) return 'meta';
+  if (words.has('mistral') || words.has('mixtral') || words.has('pixtral') || words.has('codestral') || words.has('ministral')) return 'mistral';
+
+  // 3순위: 제조사명이 생략된 고유 티어 코드명만 남았을 때 (flash 같은 범용 티어명은 Google 추론에서 제외)
+  if (words.has('haiku') || words.has('sonnet') || words.has('opus') || words.has('fable')) return 'anthropic';
+  if (words.has('argon') || words.has('carbon') || words.has('hydrogen')) return 'google';
+  if (words.has('luna') || words.has('terra') || words.has('sol') || words.has('astra')) return 'openai';
+
+  // 4순위: 네임스페이스·소유자 메타 힌트
+  const hint = `${namespace} ${ownedBy}`;
+  if (/anthropic/.test(hint)) return 'anthropic';
+  if (/google|deepmind/.test(hint)) return 'google';
+  if (/xai|x-ai/.test(hint)) return 'xai';
+  if (/deepseek/.test(hint)) return 'deepseek';
+  if (/alibaba|qwen/.test(hint)) return 'alibaba';
+  if (/meta/.test(hint)) return 'meta';
+  if (/mistral/.test(hint)) return 'mistral';
+  if (/\bopenai\b/.test(hint) && !/mindlogic|system/.test(hint)) return 'openai';
+  return 'other';
 }
 
-/* 텍스트/비전 LLM이 아닌 모델 제외 및 파생 모델 필터링 */
-const NON_TEXT_RE = /embed|rerank|moderation|image|imagen|dall|flux|midjourney|diffusion|sdxl|stable-?image|ideogram|recraft|firefly|banana|seedream|video|veo|sora|kling|runway|luma|pika|hailuo|seedance|(^|[-_/.])wan[-_.\d]|music|suno|udio|lyria|tts|whisper|stt|transcri|speech|audio|voice|realtime|aqa|learnlm|robotics/;
-const isNonTextId = id => NON_TEXT_RE.test(String(id).toLowerCase());
-
-const EXCLUDE_KEYWORDS = [
-  'nano', 'embedding', 'imagen', 'dall-e', 'sora', 'veo',
-  'tts', 'whisper', 'audio', 'moderation', '1.0', '1.5', '2.0',
-  'exp', 'preview', 'live', 'thinking', 'omni', 'latest',
-  'banana', 'robotics', 'computer-use', 'transcri', 'translate',
-  'research', 'antigravity', 'customtools'
-];
-
-const FOUR_TIER_KEYWORDS = [
-  'flash', 'haiku', 'luna', 'gemma',
-  'sonnet', 'terra', 'pro',
-  'sol', 'opus', 'argon',
-  'astra', 'fable', 'carbon'
-];
-
-function isExcludedModel(id) {
-  const l = String(id).toLowerCase();
-  if (isNonTextId(id)) return true;
-  // gemini-3.1-pro는 정규 프로 모델이므로 preview 키워드가 있어도 명시적 허용
-  if (l.includes('3.1-pro')) {
-    if (l.includes('customtools') || l.includes('image')) return true;
-    return false;
-  }
-  // 주의: 'gemini' 브랜드명에 'mini'가 포함되므로 독립 단어/구분자(예: gpt-4o-mini, o1-mini 등)일 때만 제외
-  if (/(^|[-_/.])mini([-_/.]|$)/.test(l)) return true;
-  // 중간 테스트/체크포인트 버전 제외 (3.1-flash, 3.6, 3.7 등)
-  if (/(^|[-_/.])3\.[167]([-_/.]|$)/.test(l)) return true;
-  if (EXCLUDE_KEYWORDS.some(k => l.includes(k))) return true;
-  return false;
+function resolveFamily(shortId, vendorKey) {
+  if (/^gemini/.test(shortId)) return 'gemini';
+  if (/^gemma/.test(shortId)) return 'gemma';
+  if (/^claude/.test(shortId) || vendorKey === 'anthropic') return 'claude';
+  if (/^o[1345](?:$|-)/.test(shortId)) return 'o-series';
+  if (/^(gpt|chatgpt)/.test(shortId) || vendorKey === 'openai') return 'gpt';
+  if (/^grok/.test(shortId) || vendorKey === 'xai') return 'grok';
+  if (/^deepseek/.test(shortId) || vendorKey === 'deepseek') return 'deepseek';
+  if (/^qwen/.test(shortId) || vendorKey === 'alibaba') return 'qwen';
+  if (/^llama/.test(shortId) || vendorKey === 'meta') return 'llama';
+  if (/^(mistral|mixtral|pixtral|ministral)/.test(shortId) || vendorKey === 'mistral') return 'mistral';
+  return 'other';
 }
 
-function isNonTextMeta(o){
+function extractVersionAndParams(shortId, tokens) {
+  let paramB = 0;
+  let dateScore = 0;
+  let major = 0, minor = 0, foundVer = false;
+
+  const dm = shortId.match(/(?:^|-)((?:20\d{2})-?\d{2}-?\d{2}|20\d{6})(?:-|$)/);
+  if (dm) dateScore = parseInt(dm[1].replace(/-/g, ''), 10) || 0;
+
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    const pm = t.match(/^e?(\d+(?:\.\d+)?)([bm])$/);
+    if (pm) {
+      const val = parseFloat(pm[1]) * (pm[2] === 'm' ? 0.001 : 1);
+      if (val > paramB) paramB = val;
+      continue;
+    }
+    if (/^20\d{6}$/.test(t) || /^20\d{2}$/.test(t)) continue;
+    if (foundVer) continue;
+
+    if (t === '4o') {
+      major = 4; minor = 0.5; foundVer = true;
+    } else if (/^o(\d+)(?:\.(\d+))?$/.test(t)) {
+      const om = t.match(/^o(\d+)(?:\.(\d+))?$/);
+      major = parseInt(om[1], 10);
+      minor = parseInt(om[2] || '0', 10);
+      foundVer = true;
+    } else if (/^(?:qwen|llama|grok|mistral|pixtral|ministral|magistral|mixtral|deepseek|gemma|gemini)?v?(\d+)(?:\.(\d+))?n?$/.test(t)) {
+      const vm = t.match(/^(?:qwen|llama|grok|mistral|pixtral|ministral|magistral|mixtral|deepseek|gemma|gemini)?v?(\d+)(?:\.(\d+))?n?$/);
+      const n1 = parseInt(vm[1], 10);
+      if (n1 >= 20) continue;
+      major = n1;
+      if (vm[2] != null) {
+        minor = parseInt(vm[2], 10);
+      } else if (tokens[i + 1] && /^\d{1,2}$/.test(tokens[i + 1]) && parseInt(tokens[i + 1], 10) < 20) {
+        minor = parseInt(tokens[i + 1], 10);
+      }
+      foundVer = true;
+    }
+  }
+
+  return { major, minor, score: major * 100 + minor, paramB, dateScore };
+}
+
+function parseModelRecord(input) {
+  const id = normalizeModelId(input);
+  const raw = (input && typeof input === 'object' && input.raw)
+    ? input.raw
+    : ((input && typeof input === 'object' && ('id' in input || 'name' in input)) ? input : (modelRecordMap.get(id) || {}));
+  const ownedBy = String(raw.owned_by || raw.owner || '').toLowerCase();
+  const slashIdx = id.lastIndexOf('/');
+  const namespace = slashIdx > 0 ? id.slice(0, slashIdx).toLowerCase() : '';
+  const shortId = (slashIdx > 0 ? id.slice(slashIdx + 1) : id).toLowerCase();
+  const tokens = shortId.replace(/\.([a-z])/g, '-$1').split(/[-_/:@]+/).filter(Boolean);
+  const tokenSet = new Set(tokens);
+  const wordSet = new Set(shortId.split(/[-_/:@.]+/).filter(Boolean));
+  const vendorKey = resolveVendor(ownedBy, namespace, shortId, tokenSet, wordSet);
+  const family = resolveFamily(shortId, vendorKey);
+  const { major, minor, score, paramB, dateScore } = extractVersionAndParams(shortId, tokens);
+
+  return {
+    id,
+    raw,
+    ownedBy,
+    namespace,
+    shortId,
+    tokens,
+    tokenSet,
+    vendorKey,
+    vendorLabel: VENDOR_LABEL[vendorKey] || '기타 모델',
+    vendorRank: VENDOR_RANK[vendorKey] ?? VENDOR_RANK.other,
+    family,
+    major,
+    minor,
+    versionScore: score,
+    paramB,
+    dateScore
+  };
+}
+
+function isNonTextMeta(o) {
   if (!o || typeof o !== 'object') return false;
+  if (Array.isArray(o.supportedGenerationMethods) && o.supportedGenerationMethods.length &&
+      !o.supportedGenerationMethods.includes('generateContent')) return true;
   const kind = String(o.type || o.mode || o.category || o.object_type || '').toLowerCase();
   if (kind && /image|video|audio|speech|embed|rerank|moderation|tts|transcri/.test(kind)) return true;
   const outs = o.output_modalities || o.architecture?.output_modalities || o.modalities?.output;
-  if (Array.isArray(outs) && outs.length && !outs.map(x=>String(x).toLowerCase()).includes('text')) return true;
+  if (Array.isArray(outs) && outs.length && !outs.map(x => String(x).toLowerCase()).includes('text')) return true;
   const cap = o.capabilities;
   if (cap && typeof cap === 'object' && !Array.isArray(cap) && ('chat' in cap || 'text' in cap) && !cap.chat && !cap.text) return true;
   return false;
 }
 
-const PINNED_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.8-flash'];
-
-function sortModelsByTier(ids){
-  return ids.sort((a,b) => {
-    // 1순위: 추천 기본 프리셋 상단 고정
-    const pinA = PINNED_MODELS.indexOf(a);
-    const pinB = PINNED_MODELS.indexOf(b);
-    if (pinA !== -1 && pinB !== -1) return pinA - pinB;
-    if (pinA !== -1) return -1;
-    if (pinB !== -1) return 1;
-
-    // 2순위: 4단계 등급순 (🟢 추천 ➔ 🔵 표준 ➔ 🟠 고비용 ➔ 🔴 초고비용)
-    const metaA = getModelMeta(a);
-    const metaB = getModelMeta(b);
-    if (metaA.grade !== metaB.grade) return metaA.grade - metaB.grade;
-
-    // 3순위: gemini 우선 노출 후 gemma
-    const gemA = a.toLowerCase().includes('gemini') ? 0 : 1;
-    const gemB = b.toLowerCase().includes('gemini') ? 0 : 1;
-    if (gemA !== gemB) return gemA - gemB;
-
-    // 4순위: 모델 버전 점수 및 이름순
-    return perfScore(b) - perfScore(a) || a.localeCompare(b);
-  });
+function isUnusableOcrModel(parsed) {
+  if (isNonTextMeta(parsed.raw)) return true;
+  if (UNUSABLE_COMPOUND_RE.test(parsed.shortId)) return true;
+  for (const t of parsed.tokens) {
+    if (UNUSABLE_TOKENS.has(t)) return true;
+  }
+  // 이미지 입력이 불가능한 구세대 채팅 계열 제외 (GPT <4, Claude <3, Gemma <3)
+  if (parsed.family === 'gpt' && parsed.major > 0 && parsed.major < 4) return true;
+  if (parsed.family === 'claude' && parsed.major > 0 && parsed.major < 3) return true;
+  if (parsed.family === 'gemma' && parsed.major > 0 && parsed.major < 3) return true;
+  return false;
 }
 
-function filterValidModels(ids, provider){
-  const clean = [...new Set(ids.map(i => String(i).replace(/^models\//,'')))].filter(id => !isExcludedModel(id));
-  if (provider === 'google'){
-    const googleModels = clean.filter(id => {
-      const l = id.toLowerCase();
-      // Google AI Studio: gemini (flash, pro, argon 등 메이저 모델) 및 gemma 모델 허용
-      if (!(l.includes('gemini') || l.includes('gemma'))) return false;
-      return true;
-    });
-    return sortModelsByTier(googleModels);
+function joinDigitMinorTokens(tokens) {
+  const out = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (/^\d{1,2}$/.test(t) && i + 1 < tokens.length && /^\d{1,2}$/.test(tokens[i + 1])) {
+      const nextNum = parseInt(tokens[i + 1], 10);
+      if (parseInt(t, 10) < 20 && nextNum < 20) {
+        out.push(`${t}.${tokens[i + 1]}`);
+        i++;
+        continue;
+      }
+    }
+    out.push(t);
   }
-  // factchat: 4단계 등급 키워드에 해당하는 모델 필터링
-  const factchatModels = clean.filter(id => FOUR_TIER_KEYWORDS.some(k => id.toLowerCase().includes(k)));
-  return sortModelsByTier(factchatModels.length ? factchatModels : clean);
+  return out;
+}
+
+const DISPLAY_WORD_MAP = {
+  gpt: 'GPT', chatgpt: 'ChatGPT', gemini: 'Gemini', gemma: 'Gemma',
+  claude: 'Claude', grok: 'Grok', deepseek: 'DeepSeek', qwen: 'Qwen',
+  llama: 'Llama', mistral: 'Mistral', mixtral: 'Mixtral', pixtral: 'Pixtral',
+  sonnet: 'Sonnet', haiku: 'Haiku', opus: 'Opus', fable: 'Fable',
+  luna: 'Luna', terra: 'Terra', sol: 'Sol', astra: 'Astra',
+  carbon: 'Carbon', argon: 'Argon', hydrogen: 'Hydrogen',
+  pro: 'Pro', flash: 'Flash', lite: 'Lite', mini: 'Mini', nano: 'Nano',
+  ultra: 'Ultra', max: 'Max', plus: 'Plus', heavy: 'Heavy', fast: 'Fast',
+  turbo: 'Turbo', chat: 'Chat', reasoner: 'Reasoner', vision: 'Vision',
+  large: 'Large', medium: 'Medium', small: 'Small', maverick: 'Maverick',
+  scout: 'Scout', vl: 'VL', omni: 'Omni', ai: 'AI', hd: 'HD'
+};
+
+function formatDisplayToken(t) {
+  const low = t.toLowerCase();
+  if (DISPLAY_WORD_MAP[low]) return DISPLAY_WORD_MAP[low];
+  if (/^gpt4o$/.test(low)) return 'GPT-4o';
+  if (/^o\d/.test(low)) return low;
+  if (/^(?:e?\d+(?:\.\d+)?[bm]|a\d+(?:\.\d+)?b|\d+e)$/.test(low)) return low.toUpperCase();
+  if (/^v\d/.test(low)) return low.toUpperCase();
+  if (/^r\d+$/.test(low)) return low.toUpperCase();
+  if (/^\d+(?:\.\d+)?[a-z]?$/.test(low)) return low;
+  if (/^[a-z]/.test(low)) return low[0].toUpperCase() + low.slice(1);
+  return t;
+}
+
+/** API 모델 ID를 사용자 친화적 깔끔한 표시 이름과 메타(Preview/로고 키)로 변환 */
+function formatModelDisplayName(modelId, rawRecord) {
+  const parsed = parseModelRecord(rawRecord ? { id: modelId, raw: rawRecord } : modelId);
+  let working = parsed.shortId;
+  let isPreview = false;
+  let compactDate = '';
+
+  const dateMatch = working.match(/(?:-|@)((20\d{2})-?(\d{2})(?:-?\d{2})?)(?=$|-)/);
+  if (dateMatch) {
+    compactDate = `${dateMatch[2]}-${dateMatch[3]}`;
+    working = working.replace(dateMatch[0], '');
+  }
+  if (/(?:^|-)preview(?=$|-)/i.test(working)) {
+    isPreview = true;
+    working = working.replace(/-preview(?=$|-)/gi, '');
+  }
+  working = working
+    .replace(/-chat-latest$/i, '')
+    .replace(/-latest$/i, '')
+    .replace(/-instruct$/i, '')
+    .replace(/-it$/i, '');
+
+  const rawTokens = working.split(/[-_]+/).filter(Boolean);
+  let label = '';
+
+  if (parsed.family === 'gemini') {
+    const toks = joinDigitMinorTokens(rawTokens.slice(1));
+    const joined = toks.map(formatDisplayToken).join(' ').replace(/\bFlash Lite\b/g, 'Flash-Lite');
+    label = `Gemini ${joined}`.trim();
+  } else if (parsed.family === 'gemma') {
+    const toks = joinDigitMinorTokens(rawTokens.slice(1));
+    const verPart = [];
+    const specPart = [];
+    for (const t of toks) {
+      if (!specPart.length && /^\d+(?:\.\d+)?[a-z]?$/i.test(t) && !/[bm]$/i.test(t)) verPart.push(t);
+      else specPart.push(formatDisplayToken(t));
+    }
+    const verStr = verPart.length ? `Gemma ${verPart.join(' ')}` : 'Gemma';
+    label = specPart.length ? `${verStr} · ${specPart.join(' ')}` : verStr;
+  } else if (parsed.family === 'claude') {
+    const rest = joinDigitMinorTokens(rawTokens.slice(1));
+    const tierToks = [];
+    const verToks = [];
+    const otherToks = [];
+    for (const t of rest) {
+      if (/^(sonnet|haiku|opus|fable)$/i.test(t)) tierToks.push(formatDisplayToken(t));
+      else if (/^\d+(?:\.\d+)?$/.test(t)) verToks.push(t);
+      else otherToks.push(formatDisplayToken(t));
+    }
+    const majNum = parseFloat(verToks[0] || '0') || parsed.major || 0;
+    const head = (tierToks.length && verToks.length)
+      ? (majNum >= 4 ? `Claude ${tierToks.join(' ')} ${verToks.join('.')}` : `Claude ${verToks.join('.')} ${tierToks.join(' ')}`)
+      : `Claude ${rest.map(formatDisplayToken).join(' ')}`;
+    label = [head, ...otherToks].filter(Boolean).join(' ').trim();
+  } else if (parsed.family === 'gpt' || parsed.family === 'o-series') {
+    if (rawTokens[0] === 'gpt' && rawTokens.length > 1) {
+      const rest = joinDigitMinorTokens(rawTokens.slice(1));
+      const ver = formatDisplayToken(rest[0]);
+      const tail = rest.slice(1).map(formatDisplayToken).join(' ');
+      label = tail ? `GPT-${ver} ${tail}` : `GPT-${ver}`;
+    } else if (rawTokens[0] === 'chatgpt' && rawTokens.length > 1) {
+      const rest = joinDigitMinorTokens(rawTokens.slice(1));
+      label = `ChatGPT-${rest.map(formatDisplayToken).join(' ')}`;
+    } else if (/^o\d/.test(rawTokens[0])) {
+      const tail = rawTokens.slice(1).map(formatDisplayToken).join(' ');
+      label = tail ? `${rawTokens[0]} ${tail}` : rawTokens[0];
+    }
+  }
+
+  if (!label) {
+    const expanded = [];
+    for (const t of joinDigitMinorTokens(rawTokens)) {
+      const qm = t.match(/^(qwen|llama|grok|deepseek)(\d+(?:\.\d+)?)$/i);
+      if (qm) { expanded.push(qm[1], qm[2]); continue; }
+      expanded.push(t);
+    }
+    const fmtParts = [];
+    const paramParts = [];
+    for (const t of expanded) {
+      if (/^(?:e?\d+(?:\.\d+)?[bm]|a\d+(?:\.\d+)?b|\d+e)$/i.test(t)) paramParts.push(formatDisplayToken(t));
+      else fmtParts.push(formatDisplayToken(t));
+    }
+    const base = fmtParts.join(' ').trim();
+    label = paramParts.length && base ? `${base} · ${paramParts.join(' ')}` : (base || paramParts.join(' '));
+  }
+
+  if (!label) label = String(parsed.raw?.display_name || parsed.raw?.displayName || modelId);
+
+  const iconKey = parsed.family === 'gemma' ? 'gemma'
+    : (parsed.family === 'gemini' && activeProvider === 'google' ? 'gemini' : parsed.vendorKey);
+
+  return { id: modelId, label, isPreview, compactDate, iconKey };
+}
+
+function buildUniqueDisplayMap(modelIds) {
+  const map = new Map();
+  const counts = new Map();
+  const entries = modelIds.map(id => formatModelDisplayName(id));
+
+  for (const e of entries) {
+    const key = `${e.label}|${e.isPreview ? 1 : 0}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  const secondCounts = new Map();
+  for (const e of entries) {
+    const key = `${e.label}|${e.isPreview ? 1 : 0}`;
+    if (counts.get(key) > 1 && e.compactDate) {
+      e.label = `${e.label} (${e.compactDate})`;
+    }
+    const k2 = `${e.label}|${e.isPreview ? 1 : 0}`;
+    secondCounts.set(k2, (secondCounts.get(k2) || 0) + 1);
+  }
+  for (const e of entries) {
+    const k2 = `${e.label}|${e.isPreview ? 1 : 0}`;
+    if (secondCounts.get(k2) > 1) {
+      const shortRaw = e.id.includes('/') ? e.id.split('/').pop() : e.id;
+      e.label = `${e.label} (${shortRaw})`;
+    }
+    map.set(e.id, e);
+  }
+  return map;
+}
+
+function inferTierFromPricing(raw) {
+  const p = raw?.pricing || raw?.cost;
+  if (!p || typeof p !== 'object') return null;
+  const outRaw = Number(p.completion ?? p.output ?? p.output_per_1m ?? p.output_cost);
+  if (!(outRaw > 0)) return null;
+  const outPer1M = outRaw < 0.01 ? outRaw * 1e6 : outRaw;
+  if (outPer1M >= 25) return 'ultra';
+  if (outPer1M >= 10) return 'high';
+  if (outPer1M >= 4)  return 'standard';
+  return 'flash';
+}
+
+function classifyModelTier(parsed) {
+  const { vendorKey, family, tokenSet, paramB, raw } = parsed;
+  let tierKey = 'standard';
+  let subRank = 5;
+
+  if (vendorKey === 'openai') {
+    if (tokenSet.has('astra')) { tierKey = 'ultra'; subRank = 10; }
+    else if (tokenSet.has('pro')) { tierKey = 'ultra'; subRank = 9; }
+    else if (tokenSet.has('max')) { tierKey = 'ultra'; subRank = 8; }
+    else if (tokenSet.has('sol')) { tierKey = 'high'; subRank = 7; }
+    else if (family === 'o-series') { tierKey = 'high'; subRank = 6; }
+    else if (tokenSet.has('terra')) { tierKey = 'standard'; subRank = 5; }
+    else if (tokenSet.has('flash') || tokenSet.has('lite')) { tierKey = 'flash'; subRank = 4; }
+    else if (tokenSet.has('mini')) { tierKey = 'flash'; subRank = 3; }
+    else if (tokenSet.has('luna')) { tierKey = 'flash'; subRank = 2; }
+    else if (tokenSet.has('nano')) { tierKey = 'flash'; subRank = 1; }
+    else { tierKey = 'standard'; subRank = 6; }
+  } else if (vendorKey === 'anthropic') {
+    if (tokenSet.has('fable')) { tierKey = 'ultra'; subRank = 4; }
+    else if (tokenSet.has('opus')) { tierKey = 'high'; subRank = 3; }
+    else if (tokenSet.has('haiku')) { tierKey = 'flash'; subRank = 1; }
+    else { tierKey = 'standard'; subRank = 2; }
+  } else if (vendorKey === 'google') {
+    if (tokenSet.has('carbon') || tokenSet.has('ultra')) { tierKey = 'ultra'; subRank = 6; }
+    else if (tokenSet.has('argon')) { tierKey = 'high'; subRank = 5; }
+    else if (tokenSet.has('pro')) { tierKey = 'standard'; subRank = 4; }
+    else if (tokenSet.has('hydrogen')) { tierKey = 'standard'; subRank = 3; }
+    else if (tokenSet.has('lite') || tokenSet.has('nano')) { tierKey = 'flash'; subRank = 1; }
+    else if (tokenSet.has('flash')) { tierKey = 'flash'; subRank = 2; }
+    else if (family === 'gemma') { tierKey = 'flash'; subRank = 3; }
+    else { tierKey = 'standard'; subRank = 4; }
+  } else {
+    if (tokenSet.has('ultra') || tokenSet.has('heavy')) { tierKey = 'ultra'; subRank = 1; }
+    else if (tokenSet.has('opus') || tokenSet.has('argon') || tokenSet.has('sol') || tokenSet.has('405b')) { tierKey = 'high'; subRank = 1; }
+    else if (tokenSet.has('lite') || tokenSet.has('nano')) { tierKey = 'flash'; subRank = 1; }
+    else if (tokenSet.has('flash') || tokenSet.has('mini') || tokenSet.has('fast') || tokenSet.has('haiku') || tokenSet.has('small')) { tierKey = 'flash'; subRank = 2; }
+    else if (family === 'deepseek' && tokenSet.has('chat') && !tokenSet.has('pro')) { tierKey = 'flash'; subRank = 3; }
+    else if (paramB > 0 && paramB <= 14) { tierKey = 'flash'; subRank = 4; }
+    else { tierKey = 'standard'; subRank = 2; }
+  }
+
+  // API 가격 정보가 있더라도 동일 등급 내부 정렬을 위한 role 기반 subRank는 보존
+  const finalTierKey = inferTierFromPricing(raw) || tierKey;
+  return { tierKey: finalTierKey, meta: MODEL_TIERS[finalTierKey], subRank };
+}
+
+function getModelMeta(modelId, rawRecord) {
+  const parsed = parseModelRecord(rawRecord ? { id: modelId, raw: rawRecord } : modelId);
+  return classifyModelTier(parsed).meta;
+}
+
+function getGoogleDisplayMeta(modelId) {
+  const { family, major, tokenSet } = parseModelRecord(modelId);
+  if (family === 'gemma') return GOOGLE_ROLE_META.gemma;
+  if (major >= 4) {
+    if (tokenSet.has('carbon') || tokenSet.has('ultra')) return GOOGLE_ROLE_META.gen4_ultra;
+    if (tokenSet.has('argon')) return GOOGLE_ROLE_META.gen4_high;
+    if (tokenSet.has('hydrogen') || tokenSet.has('flash')) return GOOGLE_ROLE_META.gen4_workhorse;
+  }
+  if (tokenSet.has('flash') || tokenSet.has('lite')) return GOOGLE_ROLE_META.flash;
+  if (tokenSet.has('pro')) return GOOGLE_ROLE_META.pro;
+  return GOOGLE_ROLE_META.default;
+}
+
+function parseGoogleCanonical(parsed) {
+  const { shortId, family, tokens, paramB } = parsed;
+  if (family !== 'gemini' && family !== 'gemma') return null;
+  if (isUnusableOcrModel(parsed)) return null;
+  for (const t of tokens) {
+    if (GOOGLE_NOISE_TOKENS.has(t)) return null;
+  }
+  if (/\b20\d{2}\b|-\d{2}-\d{4}(?:-|$)|-\d{3}$/.test(shortId)) return null;
+
+  if (family === 'gemma') {
+    const gm = shortId.match(/^gemma-(\d+(?:\.\d+)?)[a-z]?-([a-z0-9-]+)-it$/);
+    if (!gm) return null;
+    const major = parseFloat(gm[1]);
+    if (major < 3) return null;
+    const minParamB = major >= 4 ? 2 : 4;
+    if (paramB > 0 && paramB < minParamB) return null;
+    return {
+      parsed,
+      canonicalKey: shortId,
+      family: 'gemma',
+      major: Math.floor(major),
+      minor: 0,
+      role: 'gemma',
+      perfRank: paramB || 10,
+      isPreview: false
+    };
+  }
+
+  // Gemini 표준 티어형: gemini-<ver>-(pro|flash-lite|flash)[-preview]
+  const tm = shortId.match(/^gemini-(\d+(?:\.\d+)?)-(pro|flash-lite|flash)(?:-(preview))?$/);
+  if (tm) {
+    const ver = parseFloat(tm[1]);
+    if (ver < 2.5) return null;
+    const [majS, minS] = tm[1].split('.');
+    const role = tm[2];
+    const roleRank = role === 'pro' ? 3 : (role === 'flash' ? 2 : 1);
+    return {
+      parsed,
+      canonicalKey: `gemini-${tm[1]}-${role}`,
+      family: 'gemini',
+      major: parseInt(majS, 10),
+      minor: parseInt(minS || '0', 10),
+      role,
+      perfRank: roleRank,
+      isPreview: Boolean(tm[3])
+    };
+  }
+
+  // Gemini 4+ 원소형: gemini-4-(carbon|argon|hydrogen)[-preview]
+  const em = shortId.match(/^gemini-(\d+(?:\.\d+)?)-([a-z]+)(?:-(preview))?$/);
+  if (em) {
+    const ver = parseFloat(em[1]);
+    if (ver < 4) return null;
+    const elem = em[2];
+    if (UNUSABLE_TOKENS.has(elem) || GOOGLE_NOISE_TOKENS.has(elem) || elem === 'preview') return null;
+    const [majS, minS] = em[1].split('.');
+    const elemPerf = { carbon: 3, argon: 2, hydrogen: 1 };
+    return {
+      parsed,
+      canonicalKey: `gemini-${em[1]}-${elem}`,
+      family: 'gemini',
+      major: parseInt(majS, 10),
+      minor: parseInt(minS || '0', 10),
+      role: elem,
+      perfRank: elemPerf[elem] ?? 2,
+      isPreview: Boolean(em[3])
+    };
+  }
+
+  return null;
+}
+
+function buildGoogleModelGroups(records) {
+  const seen = new Set();
+  const candidates = [];
+  for (const rec of records) {
+    const p = parseModelRecord(rec);
+    if (!p.id || seen.has(p.id)) continue;
+    seen.add(p.id);
+    const canon = parseGoogleCanonical(p);
+    if (canon) candidates.push(canon);
+  }
+
+  // 정식 모델이 함께 존재하면 -preview 중복 제거 (정식 없는 경우엔 preview 유지)
+  const stableKeys = new Set(candidates.filter(c => !c.isPreview).map(c => c.canonicalKey));
+  const deduped = candidates.filter(c => !c.isPreview || !stableKeys.has(c.canonicalKey));
+
+  // Gemini 3.x 세대교체 구간 정리: 동일 role(pro/flash/flash-lite) 중 최신 minor만 유지
+  const maxMinorByRole = new Map();
+  for (const c of deduped) {
+    if (c.family === 'gemini' && c.major === 3) {
+      const prev = maxMinorByRole.get(c.role) ?? -1;
+      if (c.minor > prev) maxMinorByRole.set(c.role, c.minor);
+    }
+  }
+  const cleanList = deduped.filter(c => {
+    if (c.family === 'gemini' && c.major === 3) {
+      return c.minor === maxMinorByRole.get(c.role);
+    }
+    return true;
+  });
+
+  // 세대·성능 순 그룹화 (비용 등급 표기 없이)
+  const bucketMap = new Map();
+  for (const c of cleanList) {
+    let gKey, gLabel, gOrder;
+    if (c.family === 'gemma') {
+      gKey = 'gemma';
+      gLabel = 'Gemma (오픈 멀티모달)';
+      gOrder = 100;
+    } else {
+      const verLabel = c.major >= 4 ? `Gemini ${c.major} (최신 세대)`
+        : (c.major === 2 && c.minor === 5 ? 'Gemini 2.5 (안정 세대)' : `Gemini ${c.major}`);
+      gKey = `gemini-${c.major}-${c.major === 2 ? c.minor : 0}`;
+      gLabel = verLabel;
+      gOrder = -(c.major * 100 + (c.major === 2 ? c.minor : 0));
+    }
+    if (!bucketMap.has(gKey)) bucketMap.set(gKey, { key: gKey, label: gLabel, order: gOrder, items: [] });
+    bucketMap.get(gKey).items.push(c);
+  }
+
+  const groups = [...bucketMap.values()]
+    .sort((a, b) => a.order - b.order)
+    .map(g => {
+      g.items.sort((a, b) => {
+        if (b.major !== a.major) return b.major - a.major;
+        if (b.perfRank !== a.perfRank) return b.perfRank - a.perfRank;
+        if (b.parsed.versionScore !== a.parsed.versionScore) return b.parsed.versionScore - a.parsed.versionScore;
+        return a.parsed.id.localeCompare(b.parsed.id);
+      });
+      return {
+        label: g.label,
+        iconKey: g.key === 'gemma' ? 'gemma' : 'gemini',
+        models: g.items.map(c => c.parsed.id)
+      };
+    });
+
+  return { groups, flatIds: groups.flatMap(g => g.models) };
+}
+
+const COHORT_MIN_CUTOFF = {
+  'openai:gpt': 5,
+  'anthropic:claude': 4,
+  'google:gemma': 3,
+  'xai:grok': 3,
+  'deepseek:v': 3,
+  'alibaba:qwen': 3,
+  'meta:llama': 3
+};
+
+const PARAM_PRESERVE_COHORTS = new Set([
+  'google:gemma', 'alibaba:qwen', 'meta:llama', 'deepseek:v', 'deepseek:r'
+]);
+
+function extractFactChatLineage(parsed) {
+  const { vendorKey, family, shortId, tokens, paramB, dateScore } = parsed;
+  let { major, minor, versionScore } = parsed;
+  const isPreview = /(?:^|[-_.])(?:preview|beta)(?:$|[-_.])/.test(shortId);
+
+  let cohort = `${vendorKey}:other`;
+  if (vendorKey === 'openai') {
+    cohort = family === 'o-series' ? 'openai:o' : 'openai:gpt';
+  } else if (vendorKey === 'anthropic') {
+    cohort = 'anthropic:claude';
+  } else if (vendorKey === 'google') {
+    cohort = family === 'gemma' ? 'google:gemma' : 'google:gemini';
+  } else if (vendorKey === 'xai') {
+    cohort = 'xai:grok';
+  } else if (vendorKey === 'deepseek') {
+    const rm = shortId.match(/(?:^|[./:-])deepseek[-.]r(\d+)(?:\.(\d+))?/);
+    if (rm) {
+      cohort = 'deepseek:r';
+      if (major === 0) {
+        major = parseInt(rm[1], 10);
+        minor = parseInt(rm[2] || '0', 10);
+        versionScore = major * 100 + minor;
+      }
+    } else if (/(?:^|[./:-])deepseek[-.]v\d+/.test(shortId)) {
+      cohort = 'deepseek:v';
+    } else {
+      cohort = 'deepseek:alias';
+    }
+  } else if (vendorKey === 'alibaba') {
+    cohort = /^qwq/.test(shortId) ? 'alibaba:qwq' : 'alibaba:qwen';
+  } else if (vendorKey === 'meta') {
+    cohort = 'meta:llama';
+  } else if (vendorKey === 'mistral') {
+    const mm = shortId.match(/^(ministral|mixtral|pixtral|magistral|mistral)/);
+    cohort = `mistral:${mm ? mm[1] : 'other'}`;
+  }
+
+  // 세대/날짜/프리뷰 토큰만 걷어내 동일 역할(roleKey) 추출
+  const keepParams = PARAM_PRESERVE_COHORTS.has(cohort) || vendorKey === 'mistral';
+  const roleParts = [];
+  let verConsumed = 0;
+  for (const t of tokens) {
+    if (/^(gpt|chatgpt|claude|gemini|gemma|grok|deepseek|qwen|qwq|llama|mistral|mixtral|ministral|pixtral|magistral)$/.test(t)) continue;
+    if (/^(preview|latest|chat|instruct|it|beta|free)$/.test(t) && tokens.length > 2) {
+      if (!(vendorKey === 'deepseek' && t === 'chat')) continue;
+    }
+    if (/^20\d{6}$/.test(t) || /^\d{4}-\d{2}-\d{2}$/.test(t)) continue;
+    if (!keepParams && /^e?\d+(?:\.\d+)?[bm]$/.test(t)) continue;
+    if (major > 0 && verConsumed === 0 && (t === String(major) || t === `v${major}` || t === `r${major}`
+      || t === `${major}n` || t === '4o' || new RegExp(`^(?:qwen|llama|grok|mistral|pixtral|ministral|magistral|mixtral|deepseek|gemma|gemini)?v?${major}(?:\\.${minor})?n?$`).test(t))) {
+      verConsumed = 1;
+      continue;
+    }
+    if (major > 0 && minor > 0 && verConsumed === 1 && t === String(minor)) {
+      verConsumed = 2;
+      continue;
+    }
+    roleParts.push(t);
+  }
+  const roleKey = roleParts.join('-') || 'base';
+
+  let majorScope = String(major);
+  if (cohort === 'google:gemini' && major === 2 && minor === 5) majorScope = '2.5';
+  else if (vendorKey === 'mistral') majorScope = 'all';
+
+  return { parsed, cohort, major, minor, versionScore, dateScore, paramB, isPreview, roleKey, majorScope };
+}
+
+function pruneFactChatLineage(cleanList) {
+  const entries = cleanList.map(extractFactChatLineage);
+  const maxMajorByCohort = new Map();
+  let hasGemini25Plus = false;
+
+  for (const e of entries) {
+    if (e.major > 0) {
+      const prev = maxMajorByCohort.get(e.cohort) ?? 0;
+      if (e.major > prev) maxMajorByCohort.set(e.cohort, e.major);
+    }
+    if (e.cohort === 'google:gemini' && (e.major >= 3 || (e.major === 2 && e.minor >= 5))) {
+      hasGemini25Plus = true;
+    }
+  }
+
+  const maxGptMajor = maxMajorByCohort.get('openai:gpt') || 0;
+  const maxGemmaMajor = maxMajorByCohort.get('google:gemma') || 0;
+
+  const currentGen = entries.filter(e => {
+    const maxM = maxMajorByCohort.get(e.cohort) || 0;
+    if (e.cohort === 'openai:o') {
+      if (maxGptMajor >= 6) return false;
+      return !(e.major > 0 && e.major < maxM);
+    }
+    if (e.cohort === 'google:gemini') {
+      if (hasGemini25Plus && e.major > 0 && (e.major < 2 || (e.major === 2 && e.minor < 5))) return false;
+      return true;
+    }
+    if (e.cohort === 'google:gemma') {
+      if (maxGemmaMajor >= 3 && e.major > 0 && e.major < 3) return false;
+      if (e.major === 3 && e.paramB > 0 && e.paramB < 4) return false;
+      if (e.major >= 4 && e.paramB > 0 && e.paramB < 2) return false;
+      return true;
+    }
+    const cutoff = COHORT_MIN_CUTOFF[e.cohort];
+    if (cutoff && maxM >= cutoff && e.major > 0 && e.major < maxM) return false;
+    return true;
+  });
+
+  // 동일 (세대 라인, majorScope, 역할) 내 구형 마이너·-preview 중복 제거
+  const bestBySlot = new Map();
+  for (const e of currentGen) {
+    const slot = `${e.cohort}:${e.majorScope}:${e.roleKey}`;
+    const prev = bestBySlot.get(slot);
+    if (!prev) {
+      bestBySlot.set(slot, e);
+      continue;
+    }
+    const better =
+      (e.isPreview !== prev.isPreview ? !e.isPreview
+        : e.versionScore !== prev.versionScore ? e.versionScore > prev.versionScore
+        : e.dateScore !== prev.dateScore ? e.dateScore > prev.dateScore
+        : e.parsed.shortId.length < prev.parsed.shortId.length);
+    if (better) bestBySlot.set(slot, e);
+  }
+  const winners = new Set(bestBySlot.values());
+  return entries.filter(e => winners.has(e)).map(e => e.parsed);
+}
+
+function compareFactChatModels(a, b, vendorKey) {
+  if (vendorKey === 'google') {
+    const famA = a.parsed.family === 'gemini' ? 0 : (a.parsed.family === 'gemma' ? 1 : 2);
+    const famB = b.parsed.family === 'gemini' ? 0 : (b.parsed.family === 'gemma' ? 1 : 2);
+    if (famA !== famB) return famA - famB;
+
+    const genA = a.parsed.family === 'gemini' && a.parsed.major === 2 ? 250 : a.parsed.major * 100;
+    const genB = b.parsed.family === 'gemini' && b.parsed.major === 2 ? 250 : b.parsed.major * 100;
+
+    if (famA === 1) {
+      if (genB !== genA) return genB - genA;
+      if (b.parsed.paramB !== a.parsed.paramB) return b.parsed.paramB - a.parsed.paramB;
+      if (b.parsed.versionScore !== a.parsed.versionScore) return b.parsed.versionScore - a.parsed.versionScore;
+      return a.parsed.id.localeCompare(b.parsed.id);
+    }
+    // FactChat Gemini는 경량/저비용 -> 플래그십/고비용 오름차순(3.5 flash-lite -> 3.8 flash -> 4 hydrogen -> 4 argon -> 4 carbon)
+    if (genA !== genB) return genA - genB;
+  } else {
+    if (b.parsed.major !== a.parsed.major) return b.parsed.major - a.parsed.major;
+  }
+
+  if (a.meta.grade !== b.meta.grade) return a.meta.grade - b.meta.grade;
+  if (a.subRank !== b.subRank) return a.subRank - b.subRank;
+  if (b.parsed.versionScore !== a.parsed.versionScore) return b.parsed.versionScore - a.parsed.versionScore;
+  if (b.parsed.dateScore !== a.parsed.dateScore) return b.parsed.dateScore - a.parsed.dateScore;
+  return a.parsed.id.localeCompare(b.parsed.id);
+}
+
+function buildFactChatModelGroups(records) {
+  const seen = new Set();
+  const parsedList = [];
+  for (const rec of records) {
+    const p = parseModelRecord(rec);
+    if (!p.id || seen.has(p.id)) continue;
+    seen.add(p.id);
+    if (isUnusableOcrModel(p)) continue;
+    parsedList.push(p);
+  }
+
+  // 날짜 스냅샷(-YYYYMMDD / -YYYY-MM-DD), -latest, -preview는 대응하는 기본 ID가 같이 있을 때만 병합
+  const allIds = new Set(parsedList.map(p => p.id));
+  const cleanList = parsedList.filter(p => {
+    const stripped = p.id.replace(/(?:-\d{8}|-\d{4}-\d{2}-\d{2}|-chat-latest|-latest|-preview)$/, '');
+    if (stripped !== p.id && allIds.has(stripped)) return false;
+    if (/^chatgpt-/.test(p.id)) {
+      const gptAlias = stripped.replace(/^chatgpt-/, 'gpt-');
+      if (allIds.has(gptAlias)) return false;
+    }
+    return true;
+  });
+
+  const prunedList = pruneFactChatLineage(cleanList);
+
+  const bucketMap = new Map();
+  for (const p of prunedList) {
+    const { meta, subRank } = classifyModelTier(p);
+    if (!bucketMap.has(p.vendorKey)) {
+      bucketMap.set(p.vendorKey, { vendorKey: p.vendorKey, label: p.vendorLabel, iconKey: p.vendorKey, rank: p.vendorRank, items: [] });
+    }
+    bucketMap.get(p.vendorKey).items.push({ parsed: p, meta, subRank });
+  }
+
+  const groups = [...bucketMap.values()]
+    .sort((a, b) => a.rank - b.rank)
+    .map(g => {
+      g.items.sort((a, b) => compareFactChatModels(a, b, g.vendorKey));
+      return { label: g.label, iconKey: g.iconKey, models: g.items.map(x => x.parsed.id) };
+    });
+
+  return { groups, flatIds: groups.flatMap(g => g.models) };
+}
+
+function organizeModels(items, provider) {
+  return provider === 'google'
+    ? buildGoogleModelGroups(items)
+    : buildFactChatModelGroups(items);
+}
+
+function filterValidModels(idsOrRecords, provider) {
+  return organizeModels(idsOrRecords, provider).flatIds;
 }
 
 /* ---------- 자동 감지 ---------- */
@@ -781,121 +1511,516 @@ function updateProviderCardUi() {
 
 function setBadge(text, cls){ const b=$('apiStatusBadge'); b.textContent = text; b.className = 'badge '+cls; }
 function msg(t, err){ const m=$('modelMsg'); m.textContent=t; m.classList.toggle('err', !!err); }
-function setModels(models, lock){
+function pickDefaultModel(flatIds, provider) {
+  if (!flatIds.length) return '';
+  if (state.model && flatIds.includes(state.model)) return state.model;
+  const preferred = [
+    DEFAULT_MODEL, 'gemini-3.8-flash', 'gemini-4-hydrogen',
+    'gpt-6-luna', 'gemini-2.5-flash', 'claude-haiku-5-5', 'claude-haiku-4-5'
+  ];
+  for (const cand of preferred) {
+    if (flatIds.includes(cand)) return cand;
+  }
+  if (provider === 'google') {
+    const fast = flatIds.find(m => /flash|hydrogen/.test(m.toLowerCase()));
+    if (fast) return fast;
+  } else {
+    const cheap = flatIds.find(m => getModelMeta(m).grade === 1)
+               || flatIds.find(m => getModelMeta(m).grade === 2);
+    if (cheap) return cheap;
+  }
+  return flatIds[0];
+}
+
+let modelPickerGroups = null;
+let modelPickerProvider = '';
+let modelDisplayMap = new Map();
+let mpFocusedIdx = -1;
+
+function renderBrandIcon(el, iconKey) {
+  if (!el) return;
+  const svg = Object.prototype.hasOwnProperty.call(VENDOR_LOGOS, iconKey)
+    ? VENDOR_LOGOS[iconKey]
+    : VENDOR_LOGOS.other;
+  el.innerHTML = svg;
+}
+
+const isModelMenuOpen = () => {
+  const menu = $('modelPickerMenu');
+  return Boolean(menu && !menu.classList.contains('hidden'));
+};
+
+function positionModelMenu() {
+  const btn = $('modelPickerBtn');
+  const menu = $('modelPickerMenu');
+  if (!btn || !menu || menu.classList.contains('hidden')) return;
+
+  const rect = btn.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const width = Math.max(rect.width, Math.min(390, vw - 20));
+  const left = Math.max(10, Math.min(rect.left, vw - width - 10));
+
+  const spaceBelow = vh - rect.bottom - 12;
+  const spaceAbove = rect.top - 12;
+  const openUp = spaceBelow < 220 && spaceAbove > spaceBelow;
+  const avail = openUp ? spaceAbove : spaceBelow;
+  const maxH = Math.min(360, Math.max(140, avail));
+
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.width = `${Math.round(width)}px`;
+  menu.style.maxHeight = `${Math.round(maxH)}px`;
+
+  const measuredH = Math.min(menu.scrollHeight, maxH);
+  const top = openUp
+    ? Math.max(10, rect.top - measuredH - 6)
+    : Math.min(vh - measuredH - 10, rect.bottom + 6);
+  menu.style.top = `${Math.round(top)}px`;
+}
+
+function setMpFocusedIndex(idx) {
+  const menu = $('modelPickerMenu');
+  if (!menu) return;
+  const opts = [...menu.querySelectorAll('.mp-option')];
+  opts.forEach(o => o.classList.remove('is-focus'));
+  if (!opts.length) { mpFocusedIdx = -1; return; }
+  mpFocusedIdx = ((idx % opts.length) + opts.length) % opts.length;
+  const cur = opts[mpFocusedIdx];
+  cur.classList.add('is-focus');
+  cur.scrollIntoView({ block: 'nearest' });
+}
+
+function openModelMenu() {
+  const btn = $('modelPickerBtn');
+  const menu = $('modelPickerMenu');
+  if (!btn || !menu || btn.disabled) return;
+  if (!menu.querySelector('.mp-option')) return;
+  hideTooltip();
+  menu.classList.remove('hidden');
+  btn.setAttribute('aria-expanded', 'true');
+  positionModelMenu();
+
+  const opts = [...menu.querySelectorAll('.mp-option')];
+  const selIdx = opts.findIndex(o => o.dataset.value === currentModel());
+  setMpFocusedIndex(selIdx >= 0 ? selIdx : 0);
+}
+
+function closeModelMenu(returnFocus) {
+  const btn = $('modelPickerBtn');
+  const menu = $('modelPickerMenu');
+  if (menu) menu.classList.add('hidden');
+  if (btn) {
+    btn.setAttribute('aria-expanded', 'false');
+    if (returnFocus) btn.focus();
+  }
+  mpFocusedIdx = -1;
+}
+
+function selectModelFromPicker(id) {
+  const sel = $('modelSelect');
+  if (!sel || sel.disabled) return;
+  if (sel.value !== id) {
+    sel.value = id;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  } else {
+    syncModelPicker(false);
+  }
+  closeModelMenu(true);
+}
+
+function createModelOptionButton(id) {
+  const disp = modelDisplayMap.get(id) || formatModelDisplayName(id);
+  const isGoogle = modelPickerProvider === 'google';
+  const meta = getModelMeta(id);
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'mp-option';
+  btn.setAttribute('role', 'option');
+  btn.dataset.value = id;
+
+  const main = document.createElement('span');
+  main.className = 'mp-opt-main';
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'mp-opt-name';
+  nameEl.textContent = disp.label;
+  main.appendChild(nameEl);
+
+  if (disp.isPreview) {
+    const pTag = document.createElement('span');
+    pTag.className = 'mp-preview-tag';
+    pTag.textContent = 'Preview';
+    main.appendChild(pTag);
+  }
+
+  const side = document.createElement('span');
+  side.className = 'mp-opt-side';
+
+  if (!isGoogle) {
+    const pill = document.createElement('span');
+    pill.className = 'mp-pill';
+    pill.textContent = meta.shortBadge;
+    pill.style.background = meta.badgeColor + '20';
+    pill.style.color = meta.badgeColor;
+    pill.style.border = `1px solid ${meta.badgeColor}66`;
+    side.appendChild(pill);
+  }
+
+  const check = document.createElement('span');
+  check.className = 'mp-check';
+  check.setAttribute('aria-hidden', 'true');
+  check.textContent = '✓';
+  side.appendChild(check);
+
+  btn.appendChild(main);
+  btn.appendChild(side);
+  btn.addEventListener('click', () => selectModelFromPicker(id));
+  return btn;
+}
+
+function renderModelPickerMenu() {
+  const menu = $('modelPickerMenu');
+  const sel = $('modelSelect');
+  if (!menu || !sel) return;
+  menu.textContent = '';
+
+  const validOpts = [...sel.options].filter(o => Boolean(o.value));
+  if (!validOpts.length) return;
+
+  if (modelPickerGroups && modelPickerGroups.length) {
+    for (const g of modelPickerGroups) {
+      if (!g.models || !g.models.length) continue;
+      const grpEl = document.createElement('div');
+      grpEl.className = 'mp-group';
+      grpEl.setAttribute('role', 'group');
+
+      const hdr = document.createElement('div');
+      hdr.className = 'mp-group-hdr';
+
+      const ico = document.createElement('span');
+      ico.className = 'mp-icon';
+      ico.setAttribute('aria-hidden', 'true');
+      renderBrandIcon(ico, g.iconKey || 'other');
+
+      const title = document.createElement('span');
+      title.textContent = g.label;
+
+      hdr.appendChild(ico);
+      hdr.appendChild(title);
+      grpEl.appendChild(hdr);
+
+      for (const id of g.models) grpEl.appendChild(createModelOptionButton(id));
+      menu.appendChild(grpEl);
+    }
+  } else {
+    const grpEl = document.createElement('div');
+    grpEl.className = 'mp-group';
+    for (const o of validOpts) grpEl.appendChild(createModelOptionButton(o.value));
+    menu.appendChild(grpEl);
+  }
+}
+
+function syncModelPicker(rebuildMenu = false) {
+  const sel = $('modelSelect');
+  const btn = $('modelPickerBtn');
+  const iconEl = $('mpTriggerIcon');
+  const labelEl = $('mpTriggerLabel');
+  const pillEl = $('mpTriggerPill');
+  const menu = $('modelPickerMenu');
+  if (!sel || !btn) return;
+
+  if (rebuildMenu) {
+    closeModelMenu(false);
+    renderModelPickerMenu();
+  }
+
+  const val = sel.value;
+  btn.disabled = sel.disabled;
+
+  if (!val) {
+    const placeholder = sel.options[0]?.textContent || '(모델 선택)';
+    if (iconEl) { iconEl.textContent = ''; iconEl.classList.add('hidden'); }
+    if (labelEl) labelEl.textContent = placeholder;
+    if (pillEl) { pillEl.textContent = ''; pillEl.classList.add('hidden'); }
+  } else {
+    const disp = modelDisplayMap.get(val) || formatModelDisplayName(val);
+    if (iconEl) {
+      iconEl.classList.remove('hidden');
+      renderBrandIcon(iconEl, disp.iconKey);
+    }
+    if (labelEl) {
+      labelEl.textContent = disp.isPreview ? `${disp.label} · Preview` : disp.label;
+    }
+    if (pillEl) {
+      if (modelPickerProvider === 'google' || activeProvider === 'google') {
+        pillEl.textContent = '';
+        pillEl.classList.add('hidden');
+      } else {
+        const meta = getModelMeta(val);
+        pillEl.textContent = meta.shortBadge;
+        pillEl.style.background = meta.badgeColor + '20';
+        pillEl.style.color = meta.badgeColor;
+        pillEl.style.border = `1px solid ${meta.badgeColor}66`;
+        pillEl.classList.remove('hidden');
+      }
+    }
+  }
+
+  if (menu) {
+    for (const optBtn of menu.querySelectorAll('.mp-option')) {
+      optBtn.setAttribute('aria-selected', optBtn.dataset.value === val ? 'true' : 'false');
+    }
+  }
+}
+
+function resetModelSelectPlaceholder(text) {
+  const sel = $('modelSelect');
+  if (sel) {
+    sel.innerHTML = '';
+    sel.appendChild(new Option(text, ''));
+    sel.disabled = true;
+  }
+  modelPickerGroups = null;
+  modelPickerProvider = '';
+  modelDisplayMap.clear();
+  syncModelPicker(true);
+  updateModelBadgeAndTooltip('');
+}
+
+function initModelPicker() {
+  const btn = $('modelPickerBtn');
+  const menu = $('modelPickerMenu');
+  if (!btn || !menu) return;
+
+  btn.addEventListener('click', () => {
+    if (isModelMenuOpen()) closeModelMenu(false);
+    else openModelMenu();
+  });
+
+  btn.addEventListener('keydown', e => {
+    if (btn.disabled) return;
+    const opts = [...menu.querySelectorAll('.mp-option')];
+    if (!opts.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!isModelMenuOpen()) openModelMenu();
+      else setMpFocusedIndex(mpFocusedIdx + 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!isModelMenuOpen()) openModelMenu();
+      else setMpFocusedIndex(mpFocusedIdx - 1);
+    } else if (e.key === 'Home' && isModelMenuOpen()) {
+      e.preventDefault();
+      setMpFocusedIndex(0);
+    } else if (e.key === 'End' && isModelMenuOpen()) {
+      e.preventDefault();
+      setMpFocusedIndex(opts.length - 1);
+    } else if ((e.key === 'Enter' || e.key === ' ') && isModelMenuOpen()) {
+      e.preventDefault();
+      const targetOpt = opts[mpFocusedIdx >= 0 ? mpFocusedIdx : 0];
+      if (targetOpt) selectModelFromPicker(targetOpt.dataset.value);
+    } else if (e.key === 'Escape' && isModelMenuOpen()) {
+      e.preventDefault();
+      closeModelMenu(true);
+    }
+  });
+
+  document.addEventListener('pointerdown', e => {
+    if (!isModelMenuOpen()) return;
+    if (!btn.contains(e.target) && !menu.contains(e.target)) closeModelMenu(false);
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && isModelMenuOpen()) {
+      e.preventDefault();
+      closeModelMenu(true);
+    }
+  });
+
+  window.addEventListener('resize', () => { if (isModelMenuOpen()) positionModelMenu(); });
+  window.addEventListener('scroll', e => {
+    if (isModelMenuOpen() && !menu.contains(e.target)) positionModelMenu();
+  }, true);
+}
+
+function setModels(modelsOrResult, lock, providerOverride) {
+  const provider = providerOverride || activeProvider;
   const sel = $('modelSelect');
   sel.innerHTML = '';
-  models.forEach(m => {
-    const meta = getModelMeta(m);
-    sel.add(new Option(`${meta.prefix} ${m}`, m));
-  });
-  const target = models.includes(state.model) ? state.model : (models.includes(DEFAULT_MODEL) ? DEFAULT_MODEL : models[0]);
-  sel.value = target;
+
+  const isGrouped = modelsOrResult && !Array.isArray(modelsOrResult) && Array.isArray(modelsOrResult.groups);
+  const groups = isGrouped ? modelsOrResult.groups : null;
+  const flatIds = isGrouped ? (modelsOrResult.flatIds || []) : (modelsOrResult || []);
+  modelDisplayMap = buildUniqueDisplayMap(flatIds);
+  modelPickerProvider = provider;
+  modelPickerGroups = (groups && !lock && groups.length)
+    ? groups.filter(g => g.models && g.models.length)
+    : null;
+
+  const makeOpt = m => {
+    const disp = modelDisplayMap.get(m) || formatModelDisplayName(m);
+    const label = disp.isPreview ? `${disp.label} (Preview)` : disp.label;
+    return new Option(label, m);
+  };
+
+  if (modelPickerGroups && modelPickerGroups.length) {
+    for (const g of modelPickerGroups) {
+      const og = document.createElement('optgroup');
+      og.label = g.label;
+      for (const m of g.models) og.appendChild(makeOpt(m));
+      sel.appendChild(og);
+    }
+  } else {
+    for (const m of flatIds) sel.appendChild(makeOpt(m));
+  }
+
+  sel.value = pickDefaultModel(flatIds, provider);
   sel.disabled = !!lock;
   state.model = sel.value; save();
+  syncModelPicker(true);
   updateModelBadgeAndTooltip(state.model);
   updateEta();
 }
 const currentModel = () => $('modelSelect').value;
 
-async function fetchModelIds(base, key){
-  const r = await fetch(base+'/models', { headers:{ Authorization:'Bearer '+key }});
-  if (!r.ok) throw new Error('HTTP '+r.status);
+async function fetchModelRecords(base, key) {
+  const r = await fetch(base + '/models', { headers: { Authorization: 'Bearer ' + key } });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
   const j = await r.json();
-  const raw = j.data||j.models||[];
-  const items = raw.length > 1 ? raw.filter(m => !isNonTextMeta(m)) : raw;   // 단일 모델 키는 예외
-  return items.map(m => m.id || m.name).filter(Boolean).map(i => String(i).replace(/^models\//,''));
+  const rawList = j.data || j.models || [];
+  const items = rawList.length > 1 ? rawList.filter(m => !isNonTextMeta(m)) : rawList;
+  const records = [];
+  for (const item of items) {
+    const id = normalizeModelId(item);
+    if (!id) continue;
+    if (item && typeof item === 'object') modelRecordMap.set(id, item);
+    records.push({ id, raw: (item && typeof item === 'object') ? item : {} });
+  }
+  return { rawCount: rawList.length, records };
 }
+
+async function fetchModelIds(base, key) {
+  const { records } = await fetchModelRecords(base, key);
+  return records.map(r => r.id);
+}
+
 /* /models 조회가 막힌 키: 대표 모델로 1토큰 호출 */
-async function probeModel(base, key){
-  for (const model of [DEFAULT_MODEL, 'gemini-3.8-flash']){
+async function probeModel(base, key) {
+  for (const model of [DEFAULT_MODEL, 'gemini-3.8-flash', 'gemini-4-hydrogen', 'gemini-2.5-flash']) {
     try {
-      const r = await fetch(base+'/chat/completions', { method:'POST',
-        headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+key },
-        body: JSON.stringify({ model, max_tokens:1, messages:[{ role:'user', content:'hi' }] }) });
+      const r = await fetch(base + '/chat/completions', { method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+        body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }) });
       if (r.ok) return model;
-    } catch(e){}
+    } catch (e) {}
   }
   return null;
 }
 
-async function autoDetectAndLoadModels(apiKey){
-  const key = (apiKey||'').trim(), seq = ++detectSeq;
+let lastSucceededKey = '';
+let pendingDetectKey = '';
+
+async function autoDetectAndLoadModels(apiKey) {
+  const key = (apiKey || '').trim(), seq = ++detectSeq;
   activeBaseUrl = ''; activeProvider = '';
-  if (!key){
-    setBadge('● 키 입력 대기','idle');
-    setModels([DEFAULT_MODEL], true);
-    $('modelSelect').innerHTML='<option value="">(키 입력 후 자동 로드)</option>';
+  pendingDetectKey = key;
+  lastSucceededKey = '';
+  modelRecordMap.clear();
+  if (!key) {
+    pendingDetectKey = '';
+    setBadge('● 키 입력 대기', 'idle');
+    resetModelSelectPlaceholder('(키 입력 후 자동 로드)');
     msg('');
     updateProviderCardUi();
+    updateEta();
     return;
   }
-  setBadge('● 감지 중…','busy'); msg('');
-  const order = key.startsWith('AIza') ? ['google','factchat'] : ['factchat','google'];
+  setBadge('● 감지 중…', 'busy'); msg('');
+  const order = key.startsWith('AIza') ? ['google', 'factchat'] : ['factchat', 'google'];
 
   // 2차: /models 프로빙
-  for (const id of order){
+  for (const id of order) {
     const p = PROVIDERS[id];
     try {
-      const ids = await fetchModelIds(p.url, key);
+      const { rawCount, records } = await fetchModelRecords(p.url, key);
       if (seq !== detectSeq) return;
       activeBaseUrl = p.url; activeProvider = id;
       updateProviderCardUi();
-      if (ids.length === 1){               // 모델 전용 키: 필터 예외, 자동 고정
-        setModels([ids[0]], true);
+      if (rawCount === 1 && records.length === 1) {   // 모델 전용 키: 필터 예외, 자동 고정
+        lastSucceededKey = key; pendingDetectKey = '';
+        setModels([records[0].id], true, id);
         setBadge(`● ${p.name} 연결됨 (단일 모델 자동 고정)`, 'ok');
-        msg(`단일 모델 키: ${ids[0]}`); return;
+        msg(`단일 모델 키: ${records[0].id}`); return;
       }
-      const list = filterValidModels(ids, id);
-      if (list.length){
-        setModels(list, false);
+      const organized = organizeModels(records, id);
+      if (organized.flatIds.length) {
+        lastSucceededKey = key; pendingDetectKey = '';
+        setModels(organized, false, id);
         setBadge(`● ${p.name} 연결됨`, 'ok');
-        msg(`사용 가능 모델 ${list.length}개 (원본 ${ids.length}개 중 필터링)`); return;
+        msg(`사용 가능 모델 ${organized.flatIds.length}개 (원본 ${rawCount}개 중 정리됨)`); return;
       }
       const m = await probeModel(p.url, key);   // 연결은 됐지만 허용 모델 없음 → 대표 모델 시도
       if (seq !== detectSeq) return;
-      if (m){ setModels([m], true); setBadge(`● ${p.name} 연결됨 (단일 모델 자동 고정)`, 'ok'); msg('필터 통과 모델이 없어 대표 모델로 고정'); return; }
-      setBadge(`● ${p.name} 연결됨 – 사용 가능 모델 없음`, 'err'); setModels([DEFAULT_MODEL], true); return;
-    } catch(e){ /* 다음 후보 */ }
+      if (m) {
+        lastSucceededKey = key; pendingDetectKey = '';
+        setModels([m], true, id);
+        setBadge(`● ${p.name} 연결됨 (단일 모델 자동 고정)`, 'ok');
+        msg('필터 통과 모델이 없어 대표 모델로 고정'); return;
+      }
+      pendingDetectKey = '';
+      setBadge(`● ${p.name} 연결됨 – 사용 가능 모델 없음`, 'err');
+      resetModelSelectPlaceholder('(사용 가능 모델 없음)'); return;
+    } catch (e) { /* 다음 후보 */ }
   }
 
   // /models 실패 → 1토큰 테스트 호출
-  for (const id of order){
+  for (const id of order) {
     const p = PROVIDERS[id];
     const m = await probeModel(p.url, key);
     if (seq !== detectSeq) return;
-    if (m){
+    if (m) {
+      lastSucceededKey = key; pendingDetectKey = '';
       activeBaseUrl = p.url; activeProvider = id;
       updateProviderCardUi();
-      setModels([m], true);
+      setModels([m], true, id);
       setBadge(`● ${p.name} 연결됨 (단일 모델 자동 고정)`, 'ok');
       msg('/models 조회 권한 없음 → 1토큰 테스트로 모델 고정'); return;
     }
   }
   if (seq !== detectSeq) return;
-  setBadge('● 연결 실패','err');
+  pendingDetectKey = '';
+  lastSucceededKey = '';
+  setBadge('● 연결 실패', 'err');
   activeProvider = '';
   updateProviderCardUi();
   msg('키가 유효하지 않거나 네트워크/CORS 문제로 두 엔드포인트 모두 연결하지 못했습니다.', true);
-  $('modelSelect').innerHTML = '<option value="">(연결 실패)</option>'; $('modelSelect').disabled = true;
+  resetModelSelectPlaceholder('(연결 실패)');
 }
 
 /* ---------- 설정 이벤트 ---------- */
 let typeTimer;
 $('apiKeyInput').addEventListener('input', () => { clearTimeout(typeTimer);
   typeTimer = setTimeout(() => { state.key = $('apiKeyInput').value.trim(); save(); autoDetectAndLoadModels(state.key); }, 500); });
-$('apiKeyInput').addEventListener('change', () => { clearTimeout(typeTimer);
-  state.key = $('apiKeyInput').value.trim(); save(); autoDetectAndLoadModels(state.key); });
+$('apiKeyInput').addEventListener('change', () => {
+  clearTimeout(typeTimer);
+  const k = $('apiKeyInput').value.trim();
+  if (k === state.key && ((k && k === pendingDetectKey) || (k && k === lastSucceededKey && activeProvider))) return;
+  if (!k && !state.key && !activeProvider && $('apiStatusBadge')?.classList.contains('idle')) return;
+  state.key = k; save(); autoDetectAndLoadModels(state.key);
+});
 $('modelSelect').onchange = () => {
   state.model = $('modelSelect').value;
   save();
+  syncModelPicker(false);
   updateModelBadgeAndTooltip(state.model);
   updateEta();
 };
 $('concurrencySelect').onchange = () => { state.conc = $('concurrencySelect').value; save(); updateEta(); };
 
-function showTooltip(){ $('modelTooltip')?.classList.remove('hidden'); }
+function showTooltip(){ if (!isModelMenuOpen()) $('modelTooltip')?.classList.remove('hidden'); }
 function hideTooltip(){ $('modelTooltip')?.classList.add('hidden'); }
-[$('modelSelect'), $('modelBadge'), $('tooltipWrap')].forEach(el => {
+[$('modelSelect'), $('modelPickerBtn'), $('modelBadge'), $('tooltipWrap')].forEach(el => {
   if (el){
     el.addEventListener('mouseenter', showTooltip);
     el.addEventListener('mouseleave', hideTooltip);
@@ -907,6 +2032,7 @@ function init(){
   $('apiKeyInput').value = state.key;
   initPageOptions();
   initSkinSwitcher();
+  initModelPicker();
   updateProviderCardUi();
   autoDetectAndLoadModels(state.key);
 }
@@ -955,6 +2081,12 @@ const sig = () => {
 };
 const loadCache = () => { try { return JSON.parse(sessionStorage.getItem(sig())||'{}'); } catch(e){ return {}; } };
 const saveCache = c => { try { sessionStorage.setItem(sig(), JSON.stringify(c)); } catch(e){ log('⚠ sessionStorage 용량 초과 – 이어하기 캐시 일부 저장 불가'); } };
+const hasCachedPage = (cache, pageNo) => typeof cache?.[pageNo] === 'string' && cache[pageNo].length > 0;
+const countCachedPages = cache => {
+  let c = 0;
+  for (let i = 1; i <= totalPages; i++) if (hasCachedPage(cache, i)) c++;
+  return c;
+};
 
 async function analyze(fileList){
   const files = Array.from(fileList);
@@ -997,7 +2129,7 @@ async function analyze(fileList){
   }
 
   $('analysisPanel').classList.remove('hidden');
-  const done = Object.keys(loadCache()).length;
+  const done = countCachedPages(loadCache());
   $('resumeBtn').classList.toggle('hidden', !(done>0 && done<totalPages));
   $('resumeBtn').textContent = `이어하기 (${done}/${totalPages} 완료)`;
   updateEta();
@@ -1024,16 +2156,16 @@ TEXT & FORMATTING (be explicit, this matters most):
 - Footnotes/endnotes: keep them at the end of the page, as "[^n]: text" with the matching [^n] marker in the body, or as plain small lines if no marker.
 - PAGE FURNITURE (critical): page numbers, running headers (book/chapter title strip at the top margin), running footers, and decorative page templates (watermarks, scanner marks, shadows, stamps, crop marks, binding shadows) are NOT body text. NEVER write them inside the Markdown body, not at the start, not in the middle, not at the end. Footnotes and margin notes that carry real content are NOT furniture and must be kept.
 - Instead, put the furniture on the very last line of the output as exactly one HTML comment: <!--PAGE {"num":"printed page number or empty","header":"running header text or empty","footer":"running footer text or empty"}-->  (valid JSON, escape double quotes inside values with a backslash). Always output this line, with empty strings when nothing exists.
-- Reading order: follow the natural order; for multi-column pages read column by column.
+- Reading order: follow the natural order; for multi-column pages read column by column. Finish a running sentence or paragraph completely before transcribing an adjacent sidebar, callout box, table, or figure caption so sentences are never split mid-thought.
 
 MATH (never output broken or code-formatted math):
-- Inline math => $...$ ; displayed/standalone equations => $$...$$ on their own lines. Use valid KaTeX/LaTeX only (\\frac, \\sqrt, \\sum, \\int, \\alpha, \\mathbf, \\begin{aligned}...\\end{aligned}, \\begin{pmatrix}... etc.).
+- Inline math => $...$ (no spaces right inside the $ delimiters, e.g. $x+1$); displayed/standalone equations => $$...$$ on their own lines. Use valid KaTeX/LaTeX only (\\frac, \\sqrt, \\sum, \\int, \\alpha, \\mathbf, \\begin{aligned}...\\end{aligned}, \\begin{pmatrix}... etc.).
 - Chemical formulas and units may use math too, e.g. $\\mathrm{H_2O}$.
 - NEVER put math inside backticks or code fences. NEVER escape the dollar signs. A currency "$" in running text must be written as \\$ .
 
 MATH (multi-line equations & tables inside math):
 - Multi-line equations (aligned steps, systems, cases, derivations): keep them in ONE $$...$$ block using \\begin{aligned}...\\end{aligned} / \\begin{cases}...\\end{cases}, one source line per row separated by \\\\ , aligned at the original "=" signs with &. Never split one derivation into separate paragraphs. Equation numbers like (3.1) => \\tag{3.1}. Numbered problems with equations keep the number as text before the math.
-- Inside table cells never use a bare | in math (write \\vert or \\mid).
+- Inside table cells never use a bare | in math (write \\vert or \\mid for single vertical bars; use \\| only for double-bar norms).
 
 TABLES & ARRANGEMENTS (layout fidelity matters):
 - Convert every ruled table to a GitHub Markdown table (header row + separator row). Keep every cell's text exactly; use <br> for line breaks inside a cell; math inside cells uses $...$. Preserve the exact number of rows and columns; empty cells stay empty (never shift text into a neighbor cell). Merged cells: leave the covered cells empty and put the text in the first cell.
@@ -1041,7 +2173,7 @@ TABLES & ARRANGEMENTS (layout fidelity matters):
 - Borderless arrangements that visually form columns or a grid (simple word lists in columns, answer grids, schedules, term/definition pairs, aligned numbers, vertical arithmetic) are ALSO tables: output a Markdown table in the original row/column order. If there is no header row, use an empty header row (| | | |) followed by the separator. Do not flatten them into one running paragraph.
 - Multiple-choice options (①②③④⑤) keep their markers and order; put each option on its own line unless they clearly sit on the same line in the original.
 
-FIGURES: flowcharts/diagrams/graphs with structure => a fenced \`\`\`mermaid block (valid syntax, keep all labels exactly). Charts, photos, illustrations => one line "*[그림: short description in the page's language, include caption text exactly]*". Always keep figure captions as text.
+FIGURES: flowcharts/diagrams/graphs with structure => a fenced \`\`\`mermaid block using flowchart TD or flowchart LR, wrapping every node label in double quotes like A["Label (note)"] to prevent syntax errors, and keeping all labels exactly. Charts, photos, illustrations => one line "*[그림: short description in the page's language, include caption text exactly]*". Always keep figure captions as text.
 
 OUTPUT: only the Markdown of this page. No commentary, no explanations, no surrounding code fence.`;
 
@@ -1051,13 +2183,15 @@ async function renderImageFileJpeg(file){
   let w = bmp.width, h = bmp.height;
   if (w > maxDim || h > maxDim){
     const ratio = Math.min(maxDim / w, maxDim / h);
-    w = Math.round(w * ratio);
-    h = Math.round(h * ratio);
+    w = Math.max(1, Math.round(w * ratio));
+    h = Math.max(1, Math.round(h * ratio));
   }
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, w, h);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(bmp, 0, 0, w, h);
   if (bmp.close) bmp.close();
   const data = c.toDataURL('image/jpeg', 0.85);
@@ -1070,9 +2204,21 @@ async function renderPageJpeg(n){
     return await renderImageFileJpeg(imageFiles[n - 1]);
   }
   const page = await pdfDoc.getPage(n);
-  const vp = page.getViewport({ scale: 2.0 });
-  const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
-  await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+  const vp1 = page.getViewport({ scale: 1.0 });
+  const maxDim1x = Math.max(vp1.width, vp1.height);
+  let scale = 2.0;
+  if (maxDim1x > 0) {
+    if (maxDim1x * scale < 1800) scale = Math.min(3.2, 1800 / maxDim1x);
+    if (maxDim1x * scale > 2500) scale = Math.max(0.25, 2500 / maxDim1x);
+  }
+  const vp = page.getViewport({ scale });
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.ceil(vp.width));
+  c.height = Math.max(1, Math.ceil(vp.height));
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  await page.render({ canvasContext: ctx, viewport: vp, background: 'rgb(255,255,255)' }).promise;
   const data = c.toDataURL('image/jpeg', 0.85);
   c.width = c.height = 0; page.cleanup();
   return data;
@@ -1093,47 +2239,153 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
   signal?.addEventListener('abort', onAbort, { once: true });
 });
 
+/* 모델이 응답 전체를 ```markdown ... ``` 으로 감싸고 끝에 <!--PAGE ...-->를 붙인 경우 외곽 펜스만 안전하게 제거 */
+function unwrapOuterMarkdownFence(text) {
+  let raw = String(text || '').replace(/\r\n?/g, '\n').trim();
+  if (!raw) return '';
+  let pageTail = '';
+  const tailMatch = raw.match(/(\n?[ \t]*<!--\s*PAGE\s*\{[\s\S]*?\}\s*-->\s*)$/i);
+  if (tailMatch) {
+    pageTail = tailMatch[1].trim();
+    raw = raw.slice(0, raw.length - tailMatch[1].length).trim();
+  }
+
+  for (let pass = 0; pass < 2; pass++) {
+    const lines = raw.split(/\r?\n/);
+    if (lines.length < 2) break;
+    const openM = lines[0].match(/^\s*(`{3,}|~{3,})([a-zA-Z0-9_-]*)\s*$/);
+    if (!openM) break;
+    const fenceChar = openM[1][0];
+    const fenceLen = openM[1].length;
+    const info = openM[2].toLowerCase();
+    if (info && info !== 'markdown' && info !== 'md') break;
+
+    const closeRe = new RegExp(`^\\s*${fenceChar}{${fenceLen},}\\s*$`);
+    let lastIdx = lines.length - 1;
+    while (lastIdx > 0 && !lines[lastIdx].trim()) lastIdx--;
+    if (lastIdx <= 0 || !closeRe.test(lines[lastIdx])) break;
+
+    const inner = lines.slice(1, lastIdx);
+    let inNested = null;
+    let earlyClose = false;
+    let sawOuterClose = false;
+    let twoMdBlocks = false;
+
+    for (const ln of inner) {
+      const fm = ln.match(/^\s*(`{3,}|~{3,})([^\s]*)\s*$/);
+      if (!fm) continue;
+      const ch = fm[1][0], len = fm[1].length, tag = (fm[2] || '').toLowerCase();
+      if (inNested) {
+        if (ch === inNested.ch && len >= inNested.len && !tag) inNested = null;
+        continue;
+      }
+      if (tag) {
+        if (sawOuterClose && (tag === 'markdown' || tag === 'md')) { twoMdBlocks = true; break; }
+        inNested = { ch, len };
+      } else if (ch === fenceChar && len >= fenceLen) {
+        if (info === '') { earlyClose = true; break; }
+        sawOuterClose = true;
+      }
+    }
+
+    if ((info === '' && (earlyClose || inNested)) || twoMdBlocks) break;
+    raw = inner.join('\n').trim();
+  }
+
+  return pageTail ? (raw ? raw + '\n' + pageTail : pageTail) : raw;
+}
+
 async function callApi(dataUrl, cfg){
-  const body = JSON.stringify({ model: cfg.model, temperature: 0, messages:[{ role:'user', content:[
-    { type:'text', text: PROMPT }, { type:'image_url', image_url:{ url: dataUrl } } ]}] });
+  const makeBody = useTemp => JSON.stringify({
+    model: cfg.model,
+    ...(useTemp ? { temperature: 0 } : {}),
+    messages: [{ role: 'user', content: [
+      { type: 'text', text: PROMPT },
+      { type: 'image_url', image_url: { url: dataUrl } }
+    ]}]
+  });
+  let useTemp = true;
+  let body = makeBody(true);
   const MAX = 6;
-  for (let a=0; a<=MAX; a++){
+  for (let a = 0; a <= MAX; a++){
     if (aborted || abortCtrl?.signal?.aborted) throw new Error('aborted');
-    let r;
+    let r, j;
     try {
-      r = await fetch(cfg.base+'/chat/completions', {
+      r = await fetch(cfg.base + '/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cfg.key },
         body,
         signal: abortCtrl?.signal
       });
+      if (r.ok) {
+        j = await r.json();
+      }
     } catch(e){
       if (aborted || abortCtrl?.signal?.aborted || e.name === 'AbortError') throw new Error('aborted');
       if (a === MAX) throw e;
-      await sleep(1000 * 2**a, abortCtrl?.signal);
+      const wait = Math.min(1000 * 2**a, 30000) + Math.random() * 500;
+      log(`  ↻ 네트워크/응답 파싱 오류 (${e.message}) – ${(wait/1000).toFixed(1)}초 후 재시도 (${a+1}/${MAX})`);
+      await sleep(wait, abortCtrl?.signal);
       continue;
     }
     if (r.ok){
-      const j = await r.json();
-      if (j.choices?.[0]?.finish_reason === 'length') log('  ⚠ 응답이 길이 제한으로 잘렸을 수 있습니다 (해당 페이지 확인 필요)');
-      let t = j.choices?.[0]?.message?.content ?? '';
-      if (Array.isArray(t)) t = t.map(x=>x.text||'').join('');
-      t = t.replace(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n```\s*$/i,'$1').trim();
+      if (j?.error) {
+        const errCode = Number(j.error.code || j.error.status || 0);
+        const errMsg = String(j.error.message || JSON.stringify(j.error)).slice(0, 200);
+        if (useTemp && /temperature/i.test(errMsg) && a < MAX) {
+          useTemp = false; body = makeBody(false);
+          log('  ℹ 모델이 temperature=0을 지원하지 않아 기본 설정으로 재시도합니다.');
+          continue;
+        }
+        const retryableErr = errCode === 408 || errCode === 429 || errCode >= 500
+          || /rate.?limit|overloaded|timeout|temporarily|unavailable|capacity|busy|try again/i.test(errMsg + ' ' + String(j.error.code || '') + ' ' + String(j.error.type || ''));
+        if (retryableErr && a < MAX) {
+          const wait = Math.min(1000 * 2**a, 30000) + Math.random() * 500;
+          log(`  ↻ API 오류 응답 (${errMsg}) – ${(wait/1000).toFixed(1)}초 후 재시도 (${a+1}/${MAX})`);
+          await sleep(wait, abortCtrl?.signal);
+          continue;
+        }
+        throw new Error('API 오류: ' + errMsg);
+      }
+      const choice = j?.choices?.[0];
+      const finish = choice?.finish_reason;
+      if (finish === 'length') log('  ⚠ 응답이 길이 제한으로 잘렸을 수 있습니다 (해당 페이지 확인 필요)');
+      else if (finish === 'content_filter' || finish === 'safety') log('  ⚠ 안전/콘텐츠 필터로 일부 내용이 제한되었을 수 있습니다');
+
+      let t = choice?.message?.content ?? '';
+      if (Array.isArray(t)) t = t.map(x => typeof x === 'string' ? x : (x?.text || '')).join('');
+      t = unwrapOuterMarkdownFence(t).trim();
+      if (!t) {
+        if (a < MAX) {
+          const wait = Math.min(1000 * 2**a, 30000) + Math.random() * 500;
+          log(`  ↻ 빈 응답 수신 (finish=${finish || 'unknown'}) – ${(wait/1000).toFixed(1)}초 후 재시도 (${a+1}/${MAX})`);
+          await sleep(wait, abortCtrl?.signal);
+          continue;
+        }
+        throw new Error(`빈 응답 반환 (finish_reason=${finish || 'none'})`);
+      }
       const u = j.usage || {};
       let inT = Number(u.prompt_tokens), outT = Number(u.completion_tokens), est = false;
       if (u.prompt_tokens == null || !(inT > 0)){ inT = Math.ceil(PROMPT.length/4) + 800; est = true; }   // 이미지 토큰 포함 역산
       if (u.completion_tokens == null || !(outT >= 0)){ outT = estimateTokens(t); est = true; }
       return { text: t, usage: { input: inT, output: outT, estimated: est } };
     }
-    if ((r.status===429 || r.status>=500) && a<MAX){
+    const errText = (await r.text().catch(() => '')).slice(0, 300);
+    if (r.status === 400 && useTemp && /temperature/i.test(errText) && a < MAX) {
+      useTemp = false;
+      body = makeBody(false);
+      log('  ℹ 모델이 temperature=0을 지원하지 않아 기본 설정으로 재시도합니다.');
+      continue;
+    }
+    if ((r.status === 408 || r.status === 429 || r.status >= 500) && a < MAX){
       if (aborted || abortCtrl?.signal?.aborted) throw new Error('aborted');
       const ra = parseFloat(r.headers.get('retry-after'));
-      const wait = (ra>0 ? ra*1000 : Math.min(1000*2**a, 30000)) + Math.random()*500;
+      const wait = (Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 60000) : Math.min(1000 * 2**a, 30000)) + Math.random() * 500;
       log(`  ↻ HTTP ${r.status} (요청 제한/대기) – ${(wait/1000).toFixed(1)}초 후 재시도 (${a+1}/${MAX})`);
       await sleep(wait, abortCtrl?.signal);
       continue;
     }
-    throw new Error('HTTP '+r.status+' '+(await r.text()).slice(0,200));
+    throw new Error('HTTP ' + r.status + ' ' + errText.slice(0, 200));
   }
 }
 
@@ -1201,7 +2453,7 @@ async function convert(resume){
   if (!resume) sessionStorage.removeItem(sig());
 
   const pending = [];
-  for (let i=1;i<=totalPages;i++) if (!cache[i]) pending.push(i);
+  for (let i=1;i<=totalPages;i++) if (!hasCachedPage(cache, i)) pending.push(i);
   running = true; aborted = false;
   abortCtrl = new AbortController();
   ['startBtn','resumeBtn'].forEach(i => $(i).disabled = true);
@@ -1260,7 +2512,7 @@ async function convert(resume){
   try {
     await startKeepAlive();
     await Promise.all(Array.from({length: Math.min(conc, pending.length)}, worker));
-    const cnt = Object.keys(cache).length;
+    const cnt = countCachedPages(cache);
     $('resumeBtn').classList.toggle('hidden', cnt>=totalPages);
     $('resumeBtn').textContent = `이어하기 (${cnt}/${totalPages} 완료)`;
     if (aborted){
@@ -1316,6 +2568,14 @@ img,svg{max-width:100%;height:auto}
 blockquote{border-left:3px solid #bbb;margin:8px 0;padding-left:10px;color:#444}
 .katex-display{overflow-x:auto;overflow-y:hidden}
 td,th{overflow-wrap:anywhere;line-height:1.5}
+sup,sub{font-size:.75em;line-height:0}
+hr{border:0;border-top:1pt solid #bbb;margin:10pt 0}
+del{text-decoration:line-through;color:#555}
+.fn-ref{font-size:.75em;color:#333;margin-left:1px}
+.footnotes{margin-top:12pt;font-size:9.2pt;line-height:1.45;color:#333}
+.fn-sep{border:0;border-top:.6pt solid #bbb;width:32%;margin:0 0 6pt 0}
+.fn-item{display:flex;gap:5px;margin:2pt 0}
+.fn-id{font-weight:700;flex-shrink:0}
 .pg-h{text-align:center;color:#666;font-size:9pt;border-bottom:.5pt solid #ccc;padding-bottom:3pt;margin-bottom:10pt}
 .pg-f{display:flex;justify-content:space-between;color:#666;font-size:9pt;border-top:.5pt solid #ccc;padding-top:3pt;margin-top:12pt}
 `;
@@ -1330,6 +2590,9 @@ const STAGE_CSS = `
 #stage strong,#stage b{font-weight:800}
 #stage em{font-style:italic}
 #stage p{margin:.5em 0}
+#stage sup,#stage sub{font-size:.75em;line-height:0}
+#stage hr{border:0;border-top:1px solid #bbb;margin:14px 0}
+#stage del{text-decoration:line-through;color:#555}
 #stage .katex-display{margin:.8em 0}
 #stage table{border-collapse:collapse;width:100%;margin:8px 0;font-size:14px}
 #stage th,#stage td{border:1px solid #888;padding:4px 7px;vertical-align:top}
@@ -1342,10 +2605,15 @@ const STAGE_CSS = `
 #stage img,#stage svg{max-width:100%;max-height:960px;height:auto}
 #stage .mermaid-svg{text-align:center;margin:10px 0}
 #stage blockquote{border-left:3px solid #bbb;margin:8px 0;padding-left:10px;color:#444}
+#stage .fn-ref{font-size:.75em;color:#333;margin-left:1px}
+#stage .footnotes{margin-top:16px;font-size:12.5px;line-height:1.45;color:#333}
+#stage .fn-sep{border:0;border-top:1px solid #bbb;width:32%;margin:0 0 8px 0}
+#stage .fn-item{display:flex;gap:6px;margin:3px 0}
+#stage .fn-id{font-weight:700;flex-shrink:0}
 `;
 document.head.appendChild(Object.assign(document.createElement('style'), { textContent: STAGE_CSS }));
 
-let outUrls = {}, outBlobs = {}, lastPagesHtml = [];
+let outUrls = {}, outBlobs = {}, outPdfPages = 0, lastPagesHtml = [];
 const baseName = () => {
   if (inputMode === 'images' && imageFiles.length) {
     return imageFiles[0].name.replace(/\.(png|jpe?g|webp|gif|bmp)$/i, '');
@@ -1359,11 +2627,24 @@ const PAGE_META_RE = /<!--\s*PAGE\s*(\{[\s\S]*?\})\s*-->/gi;
 const mdPlain = s => String(s||'').replace(/<[^>]+>/g,'').replace(/[*_`~#>]/g,'').trim();
 const furnKey = s => mdPlain(s).replace(/[\s\d\u00a0|·•\-–—~./()\[\]:]+/g,' ').trim().toLowerCase();
 const isPageNumLine = s => /^[-–—\s]*(?:p\.?\s*)?\d{1,4}(?:\s*(?:\/|of)\s*\d{1,4})?[-–—\s]*$/i.test(mdPlain(s));
+const isBlockMarkdownLine = s => /^\s*(?:[#>|$]|[-*+]\s|\d+[.)]\s)/.test(s);
 
 function splitPageMeta(md){
   const meta = { num:'', header:'', footer:'' };
-  const body = String(md||'').replace(PAGE_META_RE, (m, j) => {
-    try { const o = JSON.parse(j); for (const k of ['num','header','footer']) if (o[k] != null) meta[k] = String(o[k]).trim(); } catch(e){}
+  const body = String(md||'').replace(/\r\n?/g, '\n').replace(PAGE_META_RE, (m, j) => {
+    try {
+      const o = JSON.parse(j);
+      for (const k of ['num','header','footer']) if (o[k] != null) meta[k] = String(o[k]).trim();
+    } catch(e) {
+      for (const k of ['num','header','footer']) {
+        const km = j.match(new RegExp(`"${k}"\\s*:\\s*"([\\s\\S]*?)"(?=\\s*(?:,\\s*"(?:num|header|footer)"\\s*:|\\}))`, 'i'));
+        if (km) meta[k] = km[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\').trim();
+      }
+      if (!meta.num) {
+        const nm = j.match(/"num"\s*:\s*(\d+)/i);
+        if (nm) meta.num = nm[1];
+      }
+    }
     return '';
   }).replace(/<!--\s*PAGE[\s\S]*?-->/gi,'').trim();
   return { body, meta };
@@ -1373,27 +2654,38 @@ function splitPageMeta(md){
 function stripFurniture(body, meta, rep){
   const lines = body.split('\n');
   const known = new Set([furnKey(meta.header), furnKey(meta.footer)].filter(k => k.length >= 2));
-  const isFurn = ln => {
+  const nonEmptyCount = lines.filter(l => l.trim()).length;
+  const isFurn = (ln, idx, side) => {
     const t = ln.trim();
     if (!t || t.length > 120) return null;
     const k = furnKey(t);
-    if (meta.num && isPageNumLine(t) && mdPlain(t).replace(/\D/g,'') === meta.num.replace(/\D/g,'')) return 'num';
+    if (isPageNumLine(t)) {
+      if (meta.num && mdPlain(t).replace(/\D/g,'') === meta.num.replace(/\D/g,'')) return 'num';
+      if (!meta.num && nonEmptyCount > 1) {
+        const plain = mdPlain(t);
+        const decorated = /(?:^[-–—]+\s*\d|\d\s*[-–—]+$|^\s*p\.?\s*\d|\d\s*(?:\/|of)\s*\d)/i.test(plain);
+        const neighborBlank = side === 'top' ? (lines[idx + 1] !== undefined && !lines[idx + 1].trim())
+          : (idx > 0 && !lines[idx - 1].trim());
+        if (decorated || neighborBlank) return 'num';
+      }
+    }
     if (k.length >= 2 && known.has(k)) return 'known';
-    if (k.length >= 4 && rep.has(k) && !/^\s*([#>|$\-*+]|\d+[.)]\s)/.test(t)) return 'rep';
+    if (k.length >= 4 && rep.has(k) && !isBlockMarkdownLine(t)) return 'rep';
     return null;
   };
-  const got = { header:'', footer:'' };
+  const got = { num:'', header:'', footer:'' };
   for (const side of ['top','bottom']){
     for (let n=0; n<2; n++){
       const idx = side === 'top' ? lines.findIndex(l => l.trim()) : (() => { for (let i=lines.length-1;i>=0;i--) if (lines[i].trim()) return i; return -1; })();
       if (idx < 0) break;
-      const kind = isFurn(lines[idx]);
+      const kind = isFurn(lines[idx], idx, side);
       if (!kind) break;
+      if (kind === 'num' && !got.num) got.num = mdPlain(lines[idx]).replace(/^[-–—\s]*(?:p\.?\s*)?/i, '').replace(/[-–—\s]+$/,'').trim();
       if (kind === 'rep') got[side === 'top' ? 'header' : 'footer'] ||= mdPlain(lines[idx]);
       lines.splice(idx, 1);
     }
   }
-  return { body: lines.join('\n').trim(), header: got.header, footer: got.footer };
+  return { body: lines.join('\n').trim(), num: got.num, header: got.header, footer: got.footer };
 }
 
 /* 캐시 → 페이지별 {body,num,header,footer}. 여러 페이지에 반복되는 짧은 맨 위/아래 줄도 머리글/바닥글로 간주 */
@@ -1404,7 +2696,7 @@ function preparePages(cache){
     const cnt = new Map();
     raw.forEach(({ body }) => {
       const ls = body.split('\n').map(l => l.trim()).filter(Boolean);
-      const keys = new Set([...ls.slice(0,2), ...ls.slice(-2)].filter(l => l.length <= 100 && !/^([#>|$\-*+]|\d+[.)]\s)/.test(l)).map(furnKey).filter(k => k.length >= 4));
+      const keys = new Set([...ls.slice(0,2), ...ls.slice(-2)].filter(l => l.length <= 100 && !isBlockMarkdownLine(l)).map(furnKey).filter(k => k.length >= 4));
       keys.forEach(k => cnt.set(k, (cnt.get(k)||0) + 1));
     });
     const need = Math.max(3, Math.ceil(totalPages * 0.4));
@@ -1412,7 +2704,7 @@ function preparePages(cache){
   }
   return raw.map(({ body, meta }) => {
     const s = stripFurniture(body, meta, rep);
-    return { body: s.body, num: meta.num, header: meta.header || s.header, footer: meta.footer || s.footer };
+    return { body: s.body, num: meta.num || s.num, header: meta.header || s.header, footer: meta.footer || s.footer };
   });
 }
 
@@ -1455,10 +2747,33 @@ function decorateCanvas(cv, d){
 function fitWideMath(root){
   const cs = getComputedStyle(root);
   const maxW = root.clientWidth - (parseFloat(cs.paddingLeft)||0) - (parseFloat(cs.paddingRight)||0);
+  if (!(maxW > 0)) return;
   root.querySelectorAll('.katex-display > .katex').forEach(k => {
+    const prevDisp = k.style.display;
+    k.style.display = 'inline-block';
     const inner = k.querySelector('.katex-html') || k;
-    const w = inner.getBoundingClientRect().width;
-    if (w > maxW) k.style.fontSize = (1.21 * (maxW / w) * 0.98).toFixed(3) + 'em';
+    const w = Math.max(k.getBoundingClientRect().width, inner.getBoundingClientRect().width, k.scrollWidth, inner.scrollWidth);
+    k.style.display = prevDisp;
+    if (w > maxW) {
+      k.style.fontSize = Math.max(0.55, 1.21 * (maxW / w) * 0.97).toFixed(3) + 'em';
+    }
+  });
+  root.querySelectorAll('.katex').forEach(k => {
+    if (k.closest('.katex-display')) return;
+    const w = Math.max(k.getBoundingClientRect().width, k.scrollWidth);
+    if (w > maxW) {
+      k.style.fontSize = Math.max(0.6, (maxW / w) * 0.96).toFixed(3) + 'em';
+    }
+  });
+  root.querySelectorAll('table').forEach(tbl => {
+    const w = Math.max(tbl.getBoundingClientRect().width, tbl.scrollWidth);
+    if (w > maxW + 1) {
+      const ratio = Math.max(0.58, (maxW / w) * 0.98);
+      tbl.style.fontSize = (14 * ratio).toFixed(1) + 'px';
+      tbl.querySelectorAll('th,td').forEach(cell => {
+        cell.style.padding = `${Math.max(2, Math.round(4 * ratio))}px ${Math.max(3, Math.round(6 * ratio))}px`;
+      });
+    }
   });
 }
 
@@ -2385,46 +3700,316 @@ async function rebuildFromCache(){
   if (running || !totalPages || $('resultCard').classList.contains('hidden')) return;
   if (building){ rebuildQueued = true; return; }
   const cache = loadCache();
-  if (Object.keys(cache).length < totalPages) return;
+  if (countCachedPages(cache) < totalPages) return;
   log('↻ 페이지 서식 옵션 적용 – 결과 파일 다시 생성');
   await buildAndPrint(cache);
+}
+
+const escHtml = s => String(s || '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+const isWordChar = ch => Boolean(ch && /[\p{L}\p{N}]/u.test(ch));
+const isPunctChar = ch => Boolean(ch && /[\p{P}\p{S}]/u.test(ch));
+
+function fixKoreanBold(text){
+  text = text.replace(/(?<!\*)\*\*\*(?=\S)([^*\n]*?\S)\*\*\*(?!\*)/g, (m, inner, off, full) => {
+    const prev = off > 0 ? full[off - 1] : '';
+    const next = off + m.length < full.length ? full[off + m.length] : '';
+    if ((isWordChar(prev) && isPunctChar(inner[0])) || (isPunctChar(inner[inner.length - 1]) && isWordChar(next))) {
+      return `<strong><em>${inner}</em></strong>`;
+    }
+    return m;
+  });
+  return text.replace(/(?<!\*)\*\*(?=\S)((?:[^*\n]|\\\*|\*(?!\*))*?\S)(?<!\\)\*\*(?!\*)/g, (m, inner, off, full) => {
+    const prev = off > 0 ? full[off - 1] : '';
+    const next = off + m.length < full.length ? full[off + m.length] : '';
+    if ((isWordChar(prev) && isPunctChar(inner[0])) || (isPunctChar(inner[inner.length - 1]) && isWordChar(next))) {
+      return `<strong>${inner}</strong>`;
+    }
+    return m;
+  });
+}
+
+function normalizeLatexForKatex(tex, display){
+  let s = String(tex || '').trim().replace(/&amp;/g, '&');
+  s = s.replace(/\\begin\{eqnarray\*?\}/g, '\\begin{aligned}')
+       .replace(/\\end\{eqnarray\*?\}/g, '\\end{aligned}')
+       .replace(/&\s*([=<>≤≥≠≈~]+)\s*&[ \t]*/g, '&$1 ')
+       .replace(/\\bold\{/g, '\\mathbf{');
+  if (!display) {
+    s = s.replace(/\\begin\{align\*?\}/g, '\\begin{aligned}')
+         .replace(/\\end\{align\*?\}/g, '\\end{aligned}')
+         .replace(/\\begin\{gather\*?\}/g, '\\begin{gathered}')
+         .replace(/\\end\{gather\*?\}/g, '\\end{gathered}')
+         .replace(/\\begin\{multline\*?\}/g, '\\begin{aligned}')
+         .replace(/\\end\{multline\*?\}/g, '\\end{aligned}')
+         .replace(/\\begin\{equation\*?\}/g, '')
+         .replace(/\\end\{equation\*?\}/g, '');
+  }
+  return s.trim();
+}
+
+function replaceInlineDollarOnLine(line, put){
+  const isTableLine = /^\s*\|/.test(line);
+  let out = '';
+  let i = 0;
+  while (i < line.length) {
+    const idx = line.indexOf('$', i);
+    if (idx < 0) { out += line.slice(i); break; }
+    let bs = 0;
+    for (let k = idx - 1; k >= 0 && line[k] === '\\'; k--) bs++;
+    if (bs % 2 === 1 || line[idx + 1] === '$') {
+      const step = line[idx + 1] === '$' ? 2 : 1;
+      out += line.slice(i, idx + step);
+      i = idx + step;
+      continue;
+    }
+
+    let close = -1;
+    for (let j = idx + 1; j < line.length; j++) {
+      if (line[j] !== '$') continue;
+      let jbs = 0;
+      for (let k = j - 1; k >= 0 && line[k] === '\\'; k--) jbs++;
+      if (jbs % 2 === 1) continue;
+      if (line[j + 1] === '$') { j++; continue; }
+      close = j;
+      break;
+    }
+    if (close < 0) { out += line.slice(i); break; }
+
+    const rawInner = line.slice(idx + 1, close);
+    const prevCh = idx > 0 ? line[idx - 1] : '';
+    const nextAfterClose = close + 1 < line.length ? line[close + 1] : '';
+    const hasMathSignal = /\\[a-zA-Z]+|[_^{}=<>+\-*/]/.test(rawInner);
+    const hasEdgeSpace = /^\s|\s$/.test(rawInner);
+    let barePipes = 0;
+    if (isTableLine) {
+      for (let p = 0; p < rawInner.length; p++) {
+        if (rawInner[p] === '|' && (p === 0 || rawInner[p - 1] !== '\\')) barePipes++;
+      }
+    }
+    const tableCrossed = isTableLine && (barePipes % 2 === 1 || /\s\|\s/.test(rawInner) || /^\d[\d,.]*\s*\|/.test(rawInner));
+    const looksLikeCurrency =
+      tableCrossed
+      || /^\d[\d,.]*(?:\s*[KMBTkmb원달러불])?\s*[(\[]$/.test(rawInner)
+      || (/^\d[\d,.]*\s*(?:[a-zA-Z]{2,}|[\u3131-\uD7A3]+)/.test(rawInner) && !hasMathSignal);
+
+    const valid = rawInner.trim().length > 0
+      && !/\d/.test(prevCh)
+      && !looksLikeCurrency
+      && (!hasEdgeSpace || hasMathSignal)
+      && !(/^\s*\d/.test(rawInner) && /\d/.test(nextAfterClose))
+      && !(/\d/.test(nextAfterClose) && hasEdgeSpace);
+
+    if (!valid) {
+      out += line.slice(i, idx + 1);
+      i = idx + 1;
+      continue;
+    }
+
+    out += line.slice(i, idx) + put(rawInner, false);
+    i = close + 1;
+  }
+  return out;
 }
 
 /* 마크다운 → HTML (수식은 marked가 건드리지 못하게 보호했다가 KaTeX로 렌더) */
 function mdToHtml(md){
   const store = [];
-  const put = (tex, display) => { store.push({ tex: tex.trim(), display }); return `@@MATH${store.length-1}@@`; };
-  md = String(md).split(/(```[\s\S]*?```|`[^`\n]*`)/).map((seg, i) => {
-    if (i % 2) return seg;                                   // 코드 구간은 그대로
+  const put = (tex, display) => { store.push({ tex: String(tex || '').trim(), display }); return `@@MATH${store.length-1}@@`; };
+
+  // 0. 코드 펜스 밖에서 실수로 백틱에 감싸진 수식 복원
+  md = String(md || '').replace(/\r\n?/g, '\n').split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/).map((seg, i) => {
+    if (i % 2) return seg;
     return seg
-      .replace(/\$\$([\s\S]+?)\$\$/g, (m,t) => '\n\n'+put(t,true)+'\n\n')
-      .replace(/\\\[([\s\S]+?)\\\]/g, (m,t) => '\n\n'+put(t,true)+'\n\n')
-      .replace(/\\\(([\s\S]+?)\\\)/g, (m,t) => put(t,false))
-      .replace(/(?<![\\$\d])\$(?!\s)([^\n$]+?)(?<!\s)\$(?!\d)/g, (m,t) => put(t,false));
+      .replace(/`(\$\$[\s\S]+?\$\$)`/g, '$1')
+      .replace(/`(\\\[[\s\S]+?\\\])`/g, '$1')
+      .replace(/`(\\\([\s\S]+?\\\))`/g, '$1')
+      .replace(/`(\$(?!\s)([^\n`$]+?)(?<!\s)\$)`/g, (m, full, inner) => {
+        if (/^\d[\d,.]*$/.test(inner.trim())) return m;
+        return /[\\^_{}=+\-*/<>|()]|^[a-zA-Z]$/.test(inner.trim()) ? full : m;
+      });
   }).join('');
+
+  // 블록 수식 치환 시 인용문(>)·표(|) 문맥 보존
+  const placeDisplayMath = (tex, offset, fullStr) => {
+    const lineStart = fullStr.lastIndexOf('\n', offset - 1) + 1;
+    const linePrefix = fullStr.slice(lineStart, offset);
+    const bqMatch = linePrefix.match(/^([ \t]*(?:>[ \t]?)+)/);
+    if (bqMatch) {
+      const bq = bqMatch[1].trimEnd() + ' ';
+      const cleaned = tex.replace(/^[ \t]*(?:>[ \t]?)+/gm, '');
+      const ph = put(cleaned, true);
+      const onlyBqBefore = linePrefix.trim() === bqMatch[1].trim();
+      return onlyBqBefore ? `\n${bq}\n${bq}${ph}\n${bq}\n` : `\n${bq}\n${bq}${ph}\n${bq}`;
+    }
+    const lineEnd = fullStr.indexOf('\n', offset);
+    const lineText = fullStr.slice(lineStart, lineEnd < 0 ? fullStr.length : lineEnd);
+    if (/^\s*\|/.test(lineText) || /^\s*(?:[-*+]|\d+[.)])\s/.test(lineText)) {
+      return put(tex, true);
+    }
+    return '\n\n' + put(tex, true) + '\n\n';
+  };
+
+  // 1. 코드 블록/인라인 코드를 제외한 구간에서 수식 추출 및 한국어 굵게 보정
+  md = md.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/).map((seg, i) => {
+    if (i % 2) return seg;
+    seg = seg
+      .replace(/\$\$([\s\S]+?)\$\$/g, (m, t, off, full) => placeDisplayMath(t, off, full))
+      .replace(/\\\[([\s\S]+?)\\\]/g, (m, t, off, full) => placeDisplayMath(t, off, full))
+      .replace(/\\\(([\s\S]+?)\\\)/g, (m, t) => put(t.replace(/^[ \t]*(?:>[ \t]?)+/gm, ''), false));
+    seg = seg.split('\n').map(ln => replaceInlineDollarOnLine(ln, put)).join('\n');
+    seg = seg.replace(/\\begin\{((?:equation|align|aligned|gather|gathered|multline|eqnarray)\*?)\}([\s\S]*?)\\end\{\1\}/g,
+      (m, env, inner, off, full) => placeDisplayMath(m, off, full));
+    return fixKoreanBold(seg);
+  }).join('');
+
+  // 2. 펜스 코드 블록 밖에서 각주([^n]: ...) 및 정렬 단락(<p align="...">) 추출
+  const footnotes = [];
+  const fnIndex = new Map();
+  const definedIds = new Set();
+  const alignBlocks = [];
+
+  const chunks = md.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/);
+  for (let i = 0; i < chunks.length; i += 2) {
+    const lines = chunks[i].split('\n');
+    const kept = [];
+    for (let li = 0; li < lines.length; li++) {
+      const fm = lines[li].match(/^\s*\[\^([^\]]+)\]:[ \t]*(.*)$/);
+      if (fm) {
+        const id = fm[1].trim();
+        const parts = [fm[2]];
+        while (li + 1 < lines.length && /^(?:[ \t]{2,}|\t)\S/.test(lines[li + 1])) {
+          parts.push(lines[++li].trim());
+        }
+        const text = parts.join(' ').trim();
+        definedIds.add(id);
+        if (fnIndex.has(id)) {
+          footnotes[fnIndex.get(id)].text += ' ' + text;
+        } else {
+          fnIndex.set(id, footnotes.length);
+          footnotes.push({ id, text });
+        }
+        continue;
+      }
+      kept.push(lines[li]);
+    }
+    chunks[i] = kept.join('\n');
+  }
+
+  for (let i = 0; i < chunks.length; i += 2) {
+    // 인라인 코드 구간을 제외한 영역에서 각주 참조 [^n] 치환
+    let chunk = chunks[i].split(/(`[^`\n]*`)/).map((sub, j) => {
+      if (j % 2) return sub;
+      return sub.replace(/\[\^([^\]]+)\](?!:)/g, (m, id) => {
+        const key = id.trim();
+        if (definedIds.has(key) || /^(?:\d{1,3}|[*†‡§¶]+|[a-z])$/i.test(key)) {
+          return `<sup class="fn-ref">[${escHtml(key)}]</sup>`;
+        }
+        return m;
+      });
+    }).join('');
+
+    // <p align="center|right|left"> 내부 마크다운이 HTML 블록 취급으로 무시되지 않도록 분리 처리
+    chunks[i] = chunk.replace(/<p\s+align=["']?(center|right|left)["']?\s*>([\s\S]*?)<\/p>/gi, (m, align, inner) => {
+      const idx = alignBlocks.length;
+      alignBlocks.push({ align: align.toLowerCase(), inner: inner.trim() });
+      return `\n\n@@ALIGN_${idx}@@\n\n`;
+    });
+  }
+  md = chunks.join('');
+
   let html = marked.parse(md, { gfm:true, breaks:true });
+
+  if (alignBlocks.length) {
+    html = html.replace(/(?:<p>\s*)?@@ALIGN_(\d+)@@(?:\s*<\/p>)?/g, (m, idx) => {
+      const blk = alignBlocks[+idx];
+      if (!blk) return '';
+      return `<p align="${blk.align}">${marked.parseInline(blk.inner, { gfm: true, breaks: true })}</p>`;
+    });
+  }
+
+  if (footnotes.length) {
+    const fnHtml = footnotes.map(f => {
+      const rendered = marked.parseInline(f.text, { gfm: true, breaks: true });
+      return `<div class="fn-item"><span class="fn-id">[${escHtml(f.id)}]</span><div>${rendered}</div></div>`;
+    }).join('');
+    html += `\n<div class="footnotes"><hr class="fn-sep">${fnHtml}</div>`;
+  }
+
   return html.replace(/@@MATH(\d+)@@/g, (m, i) => {
-    const { tex, display } = store[+i];
-    try { return katex.renderToString(tex, { displayMode: display, throwOnError:false, output:'html', strict:'ignore' }); }
-    catch(e){ return `<code>${tex.replace(/[<>&]/g,'')}</code>`; }
+    const item = store[+i];
+    if (!item) return m;
+    const { tex, display } = item;
+    try {
+      return katex.renderToString(normalizeLatexForKatex(tex, display), {
+        displayMode: display, throwOnError: false, output: 'html', strict: 'ignore'
+      });
+    } catch(e){
+      return `<code>${escHtml(tex)}</code>`;
+    }
   });
 }
 
-/* 마크다운 → 페이지별 HTML (Mermaid는 SVG로 치환) */
+function sanitizeMermaidCode(code){
+  let s = String(code || '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .trim();
+  if (/^(?:flowchart|graph)\s*(?:\n|$)/i.test(s)) {
+    s = s.replace(/^(flowchart|graph)\s*(?=\n|$)/i, '$1 TD');
+  }
+  const quoteLabel = txt => txt.replace(/"/g, '#quot;').trim();
+  if (/^\s*(?:flowchart|graph)\b/i.test(s)) {
+    s = s.split('\n').map((ln, idx) => {
+      if (idx === 0 || /^\s*%%/.test(ln)) return ln;
+      ln = ln.replace(/(\b[A-Za-z0-9_.-]+)\s*\[([^"\[\]\n][^\]\n]*?)\]/g, (m, id, lbl) => {
+        if (/^\[.*\]$/.test(lbl) || /^\(.*\)$/.test(lbl) || /^\/.*\/$/.test(lbl)) return m;
+        return /[():/<>;&{}]/.test(lbl) ? `${id}["${quoteLabel(lbl)}"]` : m;
+      });
+      ln = ln.replace(/(\b[A-Za-z0-9_.-]+)\s*(?<!\()\(([^"()\n\[][^()\n]*?)\)(?!\))/g, (m, id, lbl) => {
+        return /[/:<>;&\[\]{}]/.test(lbl) ? `${id}("${quoteLabel(lbl)}")` : m;
+      });
+      ln = ln.replace(/(\b[A-Za-z0-9_.-]+)\s*(?<!\{)\{([^"{}\n][^}\n]*?)\}(?!\})/g, (m, id, lbl) => {
+        return /[():/<>;&\[\]]/.test(lbl) ? `${id}{"${quoteLabel(lbl)}"}` : m;
+      });
+      ln = ln.replace(/\|([^"|\n]+)\|/g, (m, lbl) => {
+        return /[():<>;&\[\]{}]/.test(lbl) ? `|"${quoteLabel(lbl)}"|` : m;
+      });
+      return ln;
+    }).join('\n');
+  }
+  return s;
+}
+
+/* 마크다운 → 페이지별 HTML (Mermaid는 SVG로 치환, 빈 헤더 표 정리) */
 async function renderPagesHtml(bodies){
   const pages = []; let mid = 0;
   for (let n=1;n<=totalPages;n++){
     const div = document.createElement('div');
     div.innerHTML = mdToHtml(bodies[n-1] || '');
+    div.querySelectorAll('table > thead').forEach(thead => {
+      const ths = [...thead.querySelectorAll('th')];
+      if (ths.length && ths.every(th => !th.textContent.trim() && !th.querySelector('img,svg,.katex'))) {
+        thead.remove();
+      }
+    });
     for (const code of div.querySelectorAll('pre > code.language-mermaid')){
-      const pre = code.parentElement, id = 'mm'+(mid++);
+      const pre = code.parentElement, id = 'mm'+(mid++), rawSrc = code.textContent;
       try {
-        const { svg } = await mermaid.render(id, code.textContent);
+        const { svg } = await mermaid.render(id, rawSrc);
         const w = document.createElement('div'); w.className = 'mermaid-svg'; w.innerHTML = svg;
         pre.replaceWith(w);
       } catch(e){
-        log(`  ⚠ p.${n} Mermaid 렌더 실패 – 코드 블록으로 유지`);
         document.getElementById('d'+id)?.remove();
+        const fixed = sanitizeMermaidCode(rawSrc);
+        try {
+          const { svg } = await mermaid.render(id + '_r', fixed);
+          const w = document.createElement('div'); w.className = 'mermaid-svg'; w.innerHTML = svg;
+          pre.replaceWith(w);
+        } catch(e2){
+          log(`  ⚠ p.${n} Mermaid 렌더 실패 – 코드 블록으로 유지`);
+          document.getElementById('d'+id+'_r')?.remove();
+        }
       }
     }
     pages.push(div.innerHTML);
@@ -2434,7 +4019,7 @@ async function renderPagesHtml(bodies){
 
 const canvasToBlob = (cv, type='image/png', quality) => new Promise(res => cv.toBlob(res, type, quality));
 
-/* A4 페이지 경계 계산: 표/제목/그림은 쪼개지 않고, 긴 표는 행 단위로 끊어 머리글을 반복하며, 문단은 줄 사이에서만 자른다 */
+/* A4 페이지 경계 계산: 표/제목/그림/수식은 쪼개지 않고, 긴 표는 행 단위로 끊어 머리글을 반복하며, 문단은 줄 사이에서만 자른다 */
 function computePageCuts(stage, Hpx){
   const px = v => parseFloat(v) || 0;
   const y0 = () => stage.getBoundingClientRect().top;
@@ -2445,13 +4030,19 @@ function computePageCuts(stage, Hpx){
     const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     for (let n; (n = tw.nextNode()); ){
       if (!n.nodeValue.trim()) continue;
+      if (n.parentElement?.closest('.katex, svg, canvas')) continue;
       const rg = document.createRange(); rg.selectNodeContents(n);
       for (const r of rg.getClientRects()) if (r.height > 0) out.push({ t: r.top - t0, b: r.bottom - t0 });
     }
-    el.querySelectorAll('img,svg,canvas').forEach(e => { const r = e.getBoundingClientRect(); if (r.height > 0) out.push({ t: r.top - t0, b: r.bottom - t0 }); });
+    el.querySelectorAll('.katex-display, .katex, img, svg, canvas, .mermaid-svg, pre, figure, tr').forEach(e => {
+      if (e.matches('.katex') && e.closest('.katex-display')) return;
+      if (e.matches('img,svg,canvas') && e.closest('.mermaid-svg,.katex')) return;
+      const r = e.getBoundingClientRect();
+      if (r.height > 0) out.push({ t: r.top - t0, b: r.bottom - t0 });
+    });
     return out;
   };
-  const safeCut = (el, pageStart, limit) => {          // 글줄/그림을 가로지르지 않는 가장 아래 위치
+  const safeCut = (el, pageStart, limit) => {          // 글줄/그림/수식을 가로지르지 않는 가장 아래 위치
     const rects = lineRects(el), minCut = pageStart + (limit - pageStart) * 0.4;
     let c = limit;
     for (let it = 0; it < 500; it++){
@@ -2463,13 +4054,37 @@ function computePageCuts(stage, Hpx){
     return c;
   };
   const isHeading = el => /^H[1-6]$/.test(el.tagName);
+  const isPushable = (el, h) => {
+    const tag = el.tagName;
+    if (isHeading(el)) return true;
+    if (/^(PRE|IMG|HR|FIGURE|DIV|SVG)$/i.test(tag) || el.querySelector('svg,img,.katex-display')) return h <= Hpx;
+    return h <= 110;                                                  // 짧은 문단/목록은 쪼개지 않음
+  };
+  const shouldKeepHeadingWithNext = (hNode, hBox, limit) => {
+    if (!hNode.nextElementSibling) return false;
+    if (hBox.bottom + 70 > limit) return true;
+    let nxt = hNode.nextElementSibling;
+    while (nxt && isHeading(nxt)) {
+      if (box(nxt).bottom + 70 > limit) return true;
+      if (!nxt.nextElementSibling) return false;
+      nxt = nxt.nextElementSibling;
+    }
+    const nb = box(nxt), nh = nb.bottom - nb.top;
+    if (nb.top >= limit - 0.5) return true;
+    if (nb.bottom <= limit + 0.5) return false;
+    if (nxt.tagName === 'TABLE') {
+      const firstRow = nxt.tBodies[0]?.rows?.[0];
+      return nh <= Hpx || (firstRow && box(firstRow).rb > limit + 0.5);
+    }
+    return isPushable(nxt, nh);
+  };
   const cuts = [0]; let pageStart = 0, node = stage.firstElementChild, guard = 0;
   const cutAt = y => { y = Math.max(y, pageStart + 1); cuts.push(y); pageStart = y; };
 
   while (node && guard++ < 5000){
     const b = box(node), limit = pageStart + Hpx, h = b.bottom - b.top;
     const atTop = b.top <= pageStart + 2;
-    if (isHeading(node) && !atTop && node.nextElementSibling && b.bottom + 70 > limit){ cutAt(b.top); continue; }  // 제목만 홀로 남지 않게
+    if (isHeading(node) && !atTop && shouldKeepHeadingWithNext(node, b, limit)){ cutAt(b.top); continue; }  // 제목만 홀로 남지 않게
     if (b.bottom <= limit + 0.5){ node = node.nextElementSibling; continue; }
     if (b.top >= limit - 0.5){ cutAt(b.top); continue; }
 
@@ -2480,7 +4095,9 @@ function computePageCuts(stage, Hpx){
       if (!atTop && (h <= Hpx || k === 0)){ cutAt(b.top); continue; }   // 한 페이지에 들어가는 표 → 통째로 다음 페이지로
       if (k === 0) k = 1;                                          // 페이지 맨 위인데 첫 행도 넘침 → 최소 1행은 남김
       if (k >= rows.length){ cutAt(limit); continue; }
+      node.style.marginBottom = '0';
       const t2 = node.cloneNode(false);                            // 긴 표 → 행 단위로 끊고 머리글 반복
+      t2.style.marginTop = '0';
       if (node.tHead) t2.appendChild(node.tHead.cloneNode(true));
       const tb = document.createElement('tbody');
       rows.slice(k).forEach(r => tb.appendChild(r));
@@ -2489,11 +4106,7 @@ function computePageCuts(stage, Hpx){
       cutAt(box(t2).top); node = t2; continue;
     }
 
-    const tag = node.tagName;
-    const pushable = isHeading(node) ? true
-      : (/^(PRE|IMG|HR|FIGURE|DIV|SVG)$/i.test(tag) || node.querySelector('svg,img')) ? h <= Hpx
-      : h <= 110;                                                  // 짧은 문단/목록은 쪼개지 않음
-    if (pushable && !atTop){ cutAt(b.top); continue; }
+    if (isPushable(node, h) && !atTop){ cutAt(b.top); continue; }
     cutAt(safeCut(node, pageStart, limit));
   }
   return cuts;
@@ -2510,11 +4123,18 @@ async function makeOutputsFromPages(pagesHtml, infos){
   const pagePngBlobs = [];
 
   try {
+    if (document.fonts?.ready) await document.fonts.ready;
     for (let i=0;i<pagesHtml.length;i++){
       $('pStatus').textContent = `렌더링 및 변환 중 ${i+1}/${pagesHtml.length}`;
       stage.innerHTML = pagesHtml[i] || '&nbsp;';
-      if (document.fonts?.ready) await document.fonts.ready;
-      await sleep(60);
+      const imgs = [...stage.querySelectorAll('img')].filter(im => !im.complete);
+      if (imgs.length) {
+        await Promise.all(imgs.map(im => new Promise(res => {
+          im.addEventListener('load', res, { once: true });
+          im.addEventListener('error', res, { once: true });
+        })));
+      }
+      await sleep(0);
       fitWideMath(stage);
       const Hpx = stage.offsetWidth * H / W;
       const bounds = [...computePageCuts(stage, Hpx), stage.offsetHeight];
@@ -2523,20 +4143,25 @@ async function makeOutputsFromPages(pagesHtml, infos){
 
       const kx = cv.width / stage.offsetWidth;
       const pxmm = cv.width / W;
+      const maxSliceH = Math.round(H * pxmm);
       for (let bi=0; bi<bounds.length-1; bi++){
         const y = Math.round(bounds[bi]*kx), yEnd = Math.min(cv.height, Math.round(bounds[bi+1]*kx));
-        const h = yEnd - y; if (h <= 2) continue;
-        pdfNo++;
-        const deco = pageDeco(info, i, pdfNo);
-        // A4 한 장 크기의 캔버스에 본문 조각 + 머리글/바닥글을 함께 그림
-        const full = document.createElement('canvas');
-        full.width = Math.round(210*pxmm); full.height = Math.round(297*pxmm);
-        const ctx = full.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0,0,full.width,full.height);
-        ctx.drawImage(cv, 0, y, cv.width, h, Math.round(M*pxmm), Math.round(M*pxmm), cv.width, h);
-        if (hasDeco(deco)) drawDeco(ctx, full.width, M*pxmm, 6.5*pxmm, full.height - 6.5*pxmm, 2.9*pxmm, deco);
-        if (!first) pdf.addPage(); first = false;
-        pdf.addImage(full.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
-        full.width = full.height = 0;
+        if (yEnd - y <= 2) continue;
+        for (let sy = y; sy < yEnd; sy += maxSliceH) {
+          const sh = Math.min(maxSliceH, yEnd - sy);
+          if (sh <= 2) continue;
+          pdfNo++;
+          const deco = pageDeco(info, i, pdfNo);
+          // A4 한 장 크기의 캔버스에 본문 조각 + 머리글/바닥글을 함께 그림
+          const full = document.createElement('canvas');
+          full.width = Math.round(210*pxmm); full.height = Math.round(297*pxmm);
+          const ctx = full.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0,0,full.width,full.height);
+          ctx.drawImage(cv, 0, sy, cv.width, sh, Math.round(M*pxmm), Math.round(M*pxmm), cv.width, sh);
+          if (hasDeco(deco)) drawDeco(ctx, full.width, M*pxmm, 6.5*pxmm, full.height - 6.5*pxmm, 2.9*pxmm, deco);
+          if (!first) pdf.addPage(); first = false;
+          pdf.addImage(full.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+          full.width = full.height = 0;
+        }
       }
 
       const outCv = decorateCanvas(cv, pageDeco(info, i, i+1));
@@ -2588,7 +4213,7 @@ async function makeOutputsFromPages(pagesHtml, infos){
     }
 
     for (const c of pageCanvases) { c.width = c.height = 0; }
-    return { pdfBlob: pdf.output('blob'), pngBlob, zipBlob };
+    return { pdfBlob: pdf.output('blob'), pngBlob, zipBlob, pdfPageCount: pdfNo };
   } finally { stage.remove(); }
 }
 
@@ -2598,7 +4223,10 @@ function updateExportFormatUI(){
   $('outExtHint').textContent = extMap[fmt] || '.pdf';
   const b = outBlobs[fmt];
   if (b) {
-    $('outSize').textContent = `${fmtSize(b.size)} · ${totalPages}페이지`;
+    const pgLabel = (fmt === 'pdf' && outPdfPages && outPdfPages !== totalPages)
+      ? `${outPdfPages}페이지 (원본 ${totalPages}페이지)`
+      : `${totalPages}페이지`;
+    $('outSize').textContent = `${fmtSize(b.size)} · ${pgLabel}`;
   }
 }
 
@@ -2618,15 +4246,15 @@ async function buildAndPrint(cache){   // (이름 유지) 인쇄 창 없이 파�
       return head + p.body + (foot ? `\n\n${foot}` : '');
     }).join('\n\n---\n\n');
     const title = baseName().replace(/[<>&]/g,'');
-    const esc = s => String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
     const sections = pagesHtml.map((h, i) => {
       const d = decos[i];
-      const hd = d.header ? `<div class="pg-h">${esc(d.header)}</div>` : '';
-      const ft = (d.footer || d.num) ? `<div class="pg-f"><span>${esc(d.footer)}</span><span>${esc(d.num)}</span></div>` : '';
+      const hd = d.header ? `<div class="pg-h">${escHtml(d.header)}</div>` : '';
+      const ft = (d.footer || d.num) ? `<div class="pg-f"><span>${escHtml(d.footer)}</span><span>${escHtml(d.num)}</span></div>` : '';
       return `<section class="page">${hd}${h}${ft}</section>`;
     }).join('');
     const htmlDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"><style>${PRINT_CSS}</style></head><body>${sections}</body></html>`;
-    const { pdfBlob, pngBlob, zipBlob } = await makeOutputsFromPages(pagesHtml, infos);
+    const { pdfBlob, pngBlob, zipBlob, pdfPageCount } = await makeOutputsFromPages(pagesHtml, infos);
+    outPdfPages = pdfPageCount || totalPages;
     const mdBlob = new Blob([mdAll], { type:'text/markdown;charset=utf-8' });
     const htmlBlob = new Blob([htmlDoc], { type:'text/html;charset=utf-8' });
 
