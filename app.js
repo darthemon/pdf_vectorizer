@@ -1,7 +1,7 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const GOOGLE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai';
-const FACTCHAT_URL = 'https://factchat-cloud.mindlogic.ai/v1/gateway';
+const BAZE_URL = 'https://factchat-cloud.mindlogic.ai/v1/gateway';
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 
 /* ---------- 4단계 모델 등급 분류 및 가중치 ---------- */
@@ -135,11 +135,12 @@ function updateModelBadgeAndTooltip(model) {
 }
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
-mermaid.initialize({ startOnLoad:false, securityLevel:'loose', theme:'default' });
+if (typeof mermaid !== 'undefined') mermaid.initialize({ startOnLoad:false, securityLevel:'loose', theme:'default' });
 
 /* ---------- 설정 저장 (localStorage) ---------- */
+const APP_DOC_TITLE = document.title;
 const LS = 'pdfvec.settings.v2';
-const state = { key:'', model:DEFAULT_MODEL, conc:'4', pgNum:'off', pgHeader:false, pgFooter:false, skin:'default' };
+const state = { key:'', model:DEFAULT_MODEL, conc:'4', pgNum:'off', pgHeader:false, pgFooter:false, skin:'default', pvMode:'single', convMode:'standard' };
 try { Object.assign(state, JSON.parse(localStorage.getItem(LS)||'{}')); } catch(e){}
 const save = () => localStorage.setItem(LS, JSON.stringify(state));
 
@@ -757,7 +758,7 @@ const PARAM_PRESERVE_COHORTS = new Set([
   'google:gemma', 'alibaba:qwen', 'meta:llama', 'deepseek:v', 'deepseek:r'
 ]);
 
-function extractFactChatLineage(parsed) {
+function extractBazeLineage(parsed) {
   const { vendorKey, family, shortId, tokens, paramB, dateScore } = parsed;
   let { major, minor, versionScore } = parsed;
   const isPreview = /(?:^|[-_.])(?:preview|beta)(?:$|[-_.])/.test(shortId);
@@ -825,8 +826,8 @@ function extractFactChatLineage(parsed) {
   return { parsed, cohort, major, minor, versionScore, dateScore, paramB, isPreview, roleKey, majorScope };
 }
 
-function pruneFactChatLineage(cleanList) {
-  const entries = cleanList.map(extractFactChatLineage);
+function pruneBazeLineage(cleanList) {
+  const entries = cleanList.map(extractBazeLineage);
   const maxMajorByCohort = new Map();
   let hasGemini25Plus = false;
 
@@ -884,7 +885,7 @@ function pruneFactChatLineage(cleanList) {
   return entries.filter(e => winners.has(e)).map(e => e.parsed);
 }
 
-function compareFactChatModels(a, b, vendorKey) {
+function compareBazeModels(a, b, vendorKey) {
   if (vendorKey === 'google') {
     const famA = a.parsed.family === 'gemini' ? 0 : (a.parsed.family === 'gemma' ? 1 : 2);
     const famB = b.parsed.family === 'gemini' ? 0 : (b.parsed.family === 'gemma' ? 1 : 2);
@@ -899,7 +900,7 @@ function compareFactChatModels(a, b, vendorKey) {
       if (b.parsed.versionScore !== a.parsed.versionScore) return b.parsed.versionScore - a.parsed.versionScore;
       return a.parsed.id.localeCompare(b.parsed.id);
     }
-    // FactChat Gemini는 경량/저비용 -> 플래그십/고비용 오름차순(3.5 flash-lite -> 3.8 flash -> 4 hydrogen -> 4 argon -> 4 carbon)
+    // BAZE Gemini는 경량/저비용 -> 플래그십/고비용 오름차순(3.5 flash-lite -> 3.8 flash -> 4 hydrogen -> 4 argon -> 4 carbon)
     if (genA !== genB) return genA - genB;
   } else {
     if (b.parsed.major !== a.parsed.major) return b.parsed.major - a.parsed.major;
@@ -912,7 +913,7 @@ function compareFactChatModels(a, b, vendorKey) {
   return a.parsed.id.localeCompare(b.parsed.id);
 }
 
-function buildFactChatModelGroups(records) {
+function buildBazeModelGroups(records) {
   const seen = new Set();
   const parsedList = [];
   for (const rec of records) {
@@ -935,7 +936,7 @@ function buildFactChatModelGroups(records) {
     return true;
   });
 
-  const prunedList = pruneFactChatLineage(cleanList);
+  const prunedList = pruneBazeLineage(cleanList);
 
   const bucketMap = new Map();
   for (const p of prunedList) {
@@ -949,7 +950,7 @@ function buildFactChatModelGroups(records) {
   const groups = [...bucketMap.values()]
     .sort((a, b) => a.rank - b.rank)
     .map(g => {
-      g.items.sort((a, b) => compareFactChatModels(a, b, g.vendorKey));
+      g.items.sort((a, b) => compareBazeModels(a, b, g.vendorKey));
       return { label: g.label, iconKey: g.iconKey, models: g.items.map(x => x.parsed.id) };
     });
 
@@ -959,7 +960,7 @@ function buildFactChatModelGroups(records) {
 function organizeModels(items, provider) {
   return provider === 'google'
     ? buildGoogleModelGroups(items)
-    : buildFactChatModelGroups(items);
+    : buildBazeModelGroups(items);
 }
 
 function filterValidModels(idsOrRecords, provider) {
@@ -968,8 +969,8 @@ function filterValidModels(idsOrRecords, provider) {
 
 /* ---------- 자동 감지 ---------- */
 const PROVIDERS = {
-  google:  { name:'Google AI Studio', url: GOOGLE_URL },
-  factchat:{ name:'FactChat',         url: FACTCHAT_URL }
+  google: { name:'Google AI Studio', url: GOOGLE_URL },
+  baze:   { name:'BAZE',             url: BAZE_URL }
 };
 let activeBaseUrl = '', activeProvider = '', detectSeq = 0;
 
@@ -1937,7 +1938,7 @@ async function autoDetectAndLoadModels(apiKey) {
     return;
   }
   setBadge('● 감지 중…', 'busy'); msg('');
-  const order = key.startsWith('AIza') ? ['google', 'factchat'] : ['factchat', 'google'];
+  const order = key.startsWith('AIza') ? ['google', 'baze'] : ['baze', 'google'];
 
   // 2차: /models 프로빙
   for (const id of order) {
@@ -2030,6 +2031,7 @@ function hideTooltip(){ $('modelTooltip')?.classList.add('hidden'); }
 function init(){
   $('concurrencySelect').value = state.conc;
   $('apiKeyInput').value = state.key;
+  setConversionMode(currentConversionMode, false);
   initPageOptions();
   initSkinSwitcher();
   initModelPicker();
@@ -2072,21 +2074,53 @@ $('fileInput').onchange = ev => { const files = ev.target.files; if (files && fi
 const isPdfFile = f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
 const isImageFile = f => f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name);
 
-const sig = () => {
+let currentConversionMode = state.convMode === 'precision' ? 'precision' : 'standard';
+const legacySig = () => {
   if (inputMode === 'images' && imageFiles.length) {
     return 'pdfvec:imgs:' + imageFiles.map(f => `${f.name}:${f.size}:${f.lastModified}`).join('|');
   }
   if (pdfFile) return `pdfvec:${pdfFile.name}:${pdfFile.size}:${pdfFile.lastModified}`;
   return 'pdfvec:empty';
 };
-const loadCache = () => { try { return JSON.parse(sessionStorage.getItem(sig())||'{}'); } catch(e){ return {}; } };
-const saveCache = c => { try { sessionStorage.setItem(sig(), JSON.stringify(c)); } catch(e){ log('⚠ sessionStorage 용량 초과 – 이어하기 캐시 일부 저장 불가'); } };
+const sig = (mode = currentConversionMode) => {
+  const m = mode === 'precision' ? 'precision' : 'standard';
+  if (inputMode === 'images' && imageFiles.length) {
+    return `pdfvec:${m}:imgs:` + imageFiles.map(f => `${f.name}:${f.size}:${f.lastModified}`).join('|');
+  }
+  if (pdfFile) return `pdfvec:${m}:${pdfFile.name}:${pdfFile.size}:${pdfFile.lastModified}`;
+  return `pdfvec:${m}:empty`;
+};
+const loadCache = (mode = currentConversionMode) => { try { return JSON.parse(sessionStorage.getItem(sig(mode))||'{}'); } catch(e){ return {}; } };
+const saveCache = (c, mode = currentConversionMode) => { try { sessionStorage.setItem(sig(mode), JSON.stringify(c)); } catch(e){ log('⚠ sessionStorage 용량 초과 – 이어하기 캐시 일부 저장 불가'); } };
 const hasCachedPage = (cache, pageNo) => typeof cache?.[pageNo] === 'string' && cache[pageNo].length > 0;
 const countCachedPages = cache => {
   let c = 0;
   for (let i = 1; i <= totalPages; i++) if (hasCachedPage(cache, i)) c++;
   return c;
 };
+function updateResumeButton(mode = currentConversionMode) {
+  const btn = $('resumeBtn');
+  if (!btn || !totalPages) return;
+  const done = countCachedPages(loadCache(mode));
+  btn.classList.toggle('hidden', !(done > 0 && done < totalPages));
+  btn.textContent = mode === 'precision'
+    ? `이어하기 (벡터 ${done}/${totalPages})`
+    : `이어하기 (${done}/${totalPages})`;
+}
+function setConversionMode(mode, persist = true) {
+  const normalized = mode === 'precision' ? 'precision' : 'standard';
+  currentConversionMode = normalized;
+  if (persist) {
+    state.convMode = normalized;
+    save();
+  }
+  document.querySelectorAll('[data-conv-mode]').forEach(btn => {
+    const active = btn.dataset.convMode === normalized;
+    btn.classList.toggle('is-active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+  if (totalPages > 0 && !running) updateResumeButton(normalized);
+}
 
 async function analyze(fileList){
   const files = Array.from(fileList);
@@ -2129,14 +2163,28 @@ async function analyze(fileList){
   }
 
   $('analysisPanel').classList.remove('hidden');
-  const done = countCachedPages(loadCache());
-  $('resumeBtn').classList.toggle('hidden', !(done>0 && done<totalPages));
-  $('resumeBtn').textContent = `이어하기 (${done}/${totalPages} 완료)`;
+  let done = countCachedPages(loadCache(currentConversionMode));
+  if (!(done > 0 && done < totalPages)) {
+    const altMode = currentConversionMode === 'precision' ? 'standard' : 'precision';
+    const altDone = countCachedPages(loadCache(altMode));
+    if (altDone > 0 && altDone < totalPages) {
+      setConversionMode(altMode, false);
+    }
+  }
+  updateResumeButton(currentConversionMode);
   updateEta();
   const dr = $('drop')?.getBoundingClientRect();
   if (dr) triggerThemeImpulse(dr.left + dr.width * 0.5, dr.top + dr.height * 0.5);
 }
-$('clearBtn').onclick = () => { if (pdfFile || imageFiles.length) { sessionStorage.removeItem(sig()); $('resumeBtn').classList.add('hidden'); log('캐시 삭제됨'); } };
+$('clearBtn').onclick = () => {
+  if (pdfFile || imageFiles.length) {
+    sessionStorage.removeItem(sig('standard'));
+    sessionStorage.removeItem(sig('precision'));
+    sessionStorage.removeItem(legacySig());
+    $('resumeBtn').classList.add('hidden');
+    log('캐시 삭제됨');
+  }
+};
 
 /* ---------- 변환 파이프라인 ---------- */
 let running = false, aborted = false;
@@ -2177,9 +2225,10 @@ FIGURES: flowcharts/diagrams/graphs with structure => a fenced \`\`\`mermaid blo
 
 OUTPUT: only the Markdown of this page. No commentary, no explanations, no surrounding code fence.`;
 
-async function renderImageFileJpeg(file){
+async function renderImageFileJpeg(file, mode = currentConversionMode){
+  const isPrecision = mode === 'precision';
   const bmp = await createImageBitmap(file);
-  const maxDim = 2400;
+  const maxDim = isPrecision ? 2800 : 2400;
   let w = bmp.width, h = bmp.height;
   if (w > maxDim || h > maxDim){
     const ratio = Math.min(maxDim / w, maxDim / h);
@@ -2194,20 +2243,26 @@ async function renderImageFileJpeg(file){
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(bmp, 0, 0, w, h);
   if (bmp.close) bmp.close();
-  const data = c.toDataURL('image/jpeg', 0.85);
+  const data = c.toDataURL('image/jpeg', isPrecision ? 0.94 : 0.85);
   c.width = c.height = 0;
   return data;
 }
 
-async function renderPageJpeg(n){
+async function renderPageJpeg(n, mode = currentConversionMode){
   if (inputMode === 'images') {
-    return await renderImageFileJpeg(imageFiles[n - 1]);
+    return await renderImageFileJpeg(imageFiles[n - 1], mode);
   }
+  const isPrecision = mode === 'precision';
   const page = await pdfDoc.getPage(n);
   const vp1 = page.getViewport({ scale: 1.0 });
   const maxDim1x = Math.max(vp1.width, vp1.height);
   let scale = 2.0;
-  if (maxDim1x > 0) {
+  if (isPrecision) {
+    if (maxDim1x > 0 && maxDim1x * scale < 2000) {
+      scale = Math.min(3.2, 2000 / maxDim1x);
+    }
+    scale = Math.max(2.0, scale);
+  } else if (maxDim1x > 0) {
     if (maxDim1x * scale < 1800) scale = Math.min(3.2, 1800 / maxDim1x);
     if (maxDim1x * scale > 2500) scale = Math.max(0.25, 2500 / maxDim1x);
   }
@@ -2219,7 +2274,7 @@ async function renderPageJpeg(n){
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, c.width, c.height);
   await page.render({ canvasContext: ctx, viewport: vp, background: 'rgb(255,255,255)' }).promise;
-  const data = c.toDataURL('image/jpeg', 0.85);
+  const data = c.toDataURL('image/jpeg', isPrecision ? 0.94 : 0.85);
   c.width = c.height = 0; page.cleanup();
   return data;
 }
@@ -2295,12 +2350,15 @@ function unwrapOuterMarkdownFence(text) {
   return pageTail ? (raw ? raw + '\n' + pageTail : pageTail) : raw;
 }
 
-async function callApi(dataUrl, cfg){
+async function callApi(dataUrl, cfg, mode = currentConversionMode){
+  const activePrompt = (mode === 'precision' && window.PrecisionModule)
+    ? window.PrecisionModule.getPrompt()
+    : PROMPT;
   const makeBody = useTemp => JSON.stringify({
     model: cfg.model,
     ...(useTemp ? { temperature: 0 } : {}),
     messages: [{ role: 'user', content: [
-      { type: 'text', text: PROMPT },
+      { type: 'text', text: activePrompt },
       { type: 'image_url', image_url: { url: dataUrl } }
     ]}]
   });
@@ -2366,7 +2424,7 @@ async function callApi(dataUrl, cfg){
       }
       const u = j.usage || {};
       let inT = Number(u.prompt_tokens), outT = Number(u.completion_tokens), est = false;
-      if (u.prompt_tokens == null || !(inT > 0)){ inT = Math.ceil(PROMPT.length/4) + 800; est = true; }   // 이미지 토큰 포함 역산
+      if (u.prompt_tokens == null || !(inT > 0)){ inT = Math.ceil(activePrompt.length/4) + 800; est = true; }   // 이미지 토큰 포함 역산
       if (u.completion_tokens == null || !(outT >= 0)){ outT = estimateTokens(t); est = true; }
       return { text: t, usage: { input: inT, output: outT, estimated: est } };
     }
@@ -2447,19 +2505,23 @@ async function convert(resume){
   if (!key) return alert('API 키를 입력하세요.');
   if (!model || model.startsWith('(')) return alert('모델을 지정하세요.');
   if (!activeBaseUrl) return alert('API 키가 아직 연결되지 않았습니다.');
+  const mode = currentConversionMode === 'precision' ? 'precision' : 'standard';
   const cfg = { base: activeBaseUrl, key, model };
   const conc = +$('concurrencySelect').value;
-  const cache = resume ? loadCache() : {};
-  if (!resume) sessionStorage.removeItem(sig());
+  const cache = resume ? loadCache(mode) : {};
+  if (!resume) sessionStorage.removeItem(sig(mode));
 
   const pending = [];
   for (let i=1;i<=totalPages;i++) if (!hasCachedPage(cache, i)) pending.push(i);
   running = true; aborted = false;
   abortCtrl = new AbortController();
-  ['startBtn','resumeBtn'].forEach(i => $(i).disabled = true);
+  ['startBtn','resumeBtn','modeStandardBtn','modePrecisionBtn'].forEach(i => { if ($(i)) $(i).disabled = true; });
   $('stopBtn').classList.remove('hidden');
   $('progCard').classList.remove('hidden');
   $('resultCard').classList.add('hidden');
+  setPreviewExpanded(false);
+  if ($('previewCard')) $('previewCard').classList.add('hidden');
+  if ($('previewContainer')) $('previewContainer').innerHTML = '';
   $('pTotal').textContent = totalPages;
   $('log').textContent = '';
   const meta = getModelMeta(model);
@@ -2489,8 +2551,8 @@ async function convert(resume){
     while (!aborted){
       const n = pending[idx++]; if (n === undefined) return;
       try {
-        const { text: md, usage } = await callApi(await renderPageJpeg(n), cfg);
-        cache[n] = md; saveCache(cache); done++;
+        const { text: rawMd, usage } = await callApi(await renderPageJpeg(n, mode), cfg, mode);
+        cache[n] = rawMd; saveCache(cache, mode); done++;
         const pageCredit = (usage.input / 1000) * meta.creditPer1kInput + (usage.output / 1000) * meta.creditPer1kOutput;
         sIn += usage.input; sOut += usage.output; sCredit += pageCredit;
         const totalTokens = sIn + sOut;
@@ -2513,8 +2575,7 @@ async function convert(resume){
     await startKeepAlive();
     await Promise.all(Array.from({length: Math.min(conc, pending.length)}, worker));
     const cnt = countCachedPages(cache);
-    $('resumeBtn').classList.toggle('hidden', cnt>=totalPages);
-    $('resumeBtn').textContent = `이어하기 (${cnt}/${totalPages} 완료)`;
+    updateResumeButton(mode);
     if (aborted){
       if (isGoogle) updateGeminiWaveState('idle', 0);
       log('⏸ 중단됨 – [이어하기]로 계속할 수 있습니다.');
@@ -2524,14 +2585,17 @@ async function convert(resume){
     if (isGoogle) updateGeminiWaveState('done', 1.0);
     triggerThemeImpulse(window.innerWidth * 0.5, window.innerHeight * 0.36);
     log('모든 페이지 완료 → 벡터 PDF 생성 중…');
-    await buildAndPrint(cache);
+    await buildAndPrint(cache, mode);
   } finally {
     stopKeepAlive();
     running = false;
     $('stopBtn').classList.add('hidden');
-    ['startBtn','resumeBtn'].forEach(i => $(i).disabled = false);
+    ['startBtn','resumeBtn','modeStandardBtn','modePrecisionBtn'].forEach(i => { if ($(i)) $(i).disabled = false; });
   }
 }
+document.querySelectorAll('[data-conv-mode]').forEach(btn => {
+  btn.onclick = () => { if (!running) setConversionMode(btn.dataset.convMode, true); };
+});
 $('startBtn').onclick = () => convert(false);
 $('resumeBtn').onclick = () => convert(true);
 $('stopBtn').onclick = () => {
@@ -2565,6 +2629,7 @@ pre,code{font-family:Consolas,monospace;font-size:9.5pt}
 pre{background:#f5f5f5;padding:8px;white-space:pre-wrap;break-inside:avoid}
 img,svg{max-width:100%;height:auto}
 .mermaid-svg{text-align:center;margin:10px 0;break-inside:avoid}
+.mermaid-svg svg{max-width:100%;height:auto}
 blockquote{border-left:3px solid #bbb;margin:8px 0;padding-left:10px;color:#444}
 .katex-display{overflow-x:auto;overflow-y:hidden}
 td,th{overflow-wrap:anywhere;line-height:1.5}
@@ -2578,6 +2643,11 @@ del{text-decoration:line-through;color:#555}
 .fn-id{font-weight:700;flex-shrink:0}
 .pg-h{text-align:center;color:#666;font-size:9pt;border-bottom:.5pt solid #ccc;padding-bottom:3pt;margin-bottom:10pt}
 .pg-f{display:flex;justify-content:space-between;color:#666;font-size:9pt;border-top:.5pt solid #ccc;padding-top:3pt;margin-top:12pt}
+.book-box{border:1.5px solid #334155;border-radius:8px;padding:14px 18px;margin:16px 0;background-color:#f8fafc;page-break-inside:avoid;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.book-callout{border-left:4px solid #2563eb;border-radius:0 6px 6px 0;background-color:#eff6ff;padding:12px 16px;margin:16px 0;page-break-inside:avoid;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.book-diagram{display:flex;justify-content:center;align-items:center;margin:1.6em auto;padding:16px;background-color:#ffffff;border:1px solid #e2e8f0;border-radius:8px;max-width:92%;page-break-inside:avoid;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.book-diagram svg{width:100%;max-width:600px;height:auto;max-height:400px;overflow:visible;display:block}
+.mermaid-fallback-code{width:100%;margin:0;padding:12px;background:#f8fafc;border-radius:6px;font-size:0.85rem;white-space:pre-wrap;overflow-x:auto}
 `;
 /* 화면 밖 렌더링용(PDF/PNG 캔버스 캡처) 스타일 – 폭 700px ≒ A4 본문폭 */
 const STAGE_CSS = `
@@ -2604,6 +2674,12 @@ const STAGE_CSS = `
 #stage pre{background:#f5f5f5;padding:8px;white-space:pre-wrap}
 #stage img,#stage svg{max-width:100%;max-height:960px;height:auto}
 #stage .mermaid-svg{text-align:center;margin:10px 0}
+#stage .mermaid-svg svg{max-width:100%;height:auto}
+#stage .book-box{border:1.5px solid #334155;border-radius:8px;padding:14px 18px;margin:16px 0;background-color:#f8fafc;page-break-inside:avoid;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+#stage .book-callout{border-left:4px solid #2563eb;border-radius:0 6px 6px 0;background-color:#eff6ff;padding:12px 16px;margin:16px 0;page-break-inside:avoid;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+#stage .book-diagram{display:flex;justify-content:center;align-items:center;margin:1.6em auto;padding:16px;background-color:#ffffff;border:1px solid #e2e8f0;border-radius:8px;max-width:92%;page-break-inside:avoid;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+#stage .book-diagram svg{width:100%;max-width:600px;height:auto;max-height:400px;overflow:visible;display:block}
+#stage .mermaid-fallback-code{width:100%;margin:0;padding:12px;background:#f8fafc;border-radius:6px;font-size:0.85rem;white-space:pre-wrap;overflow-x:auto}
 #stage blockquote{border-left:3px solid #bbb;margin:8px 0;padding-left:10px;color:#444}
 #stage .fn-ref{font-size:.75em;color:#333;margin-left:1px}
 #stage .footnotes{margin-top:16px;font-size:12.5px;line-height:1.45;color:#333}
@@ -3699,10 +3775,11 @@ let building = false, rebuildQueued = false;
 async function rebuildFromCache(){
   if (running || !totalPages || $('resultCard').classList.contains('hidden')) return;
   if (building){ rebuildQueued = true; return; }
-  const cache = loadCache();
+  const mode = currentConversionMode === 'precision' ? 'precision' : 'standard';
+  const cache = loadCache(mode);
   if (countCachedPages(cache) < totalPages) return;
   log('↻ 페이지 서식 옵션 적용 – 결과 파일 다시 생성');
-  await buildAndPrint(cache);
+  await buildAndPrint(cache, mode);
 }
 
 const escHtml = s => String(s || '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
@@ -3849,8 +3926,8 @@ function mdToHtml(md){
     return '\n\n' + put(tex, true) + '\n\n';
   };
 
-  // 1. 코드 블록/인라인 코드를 제외한 구간에서 수식 추출 및 한국어 굵게 보정
-  md = md.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/).map((seg, i) => {
+  // 1. 코드 블록/인라인 코드/SVG/HTML 주석을 제외한 구간에서 수식 추출 및 한국어 굵게 보정
+  md = md.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`|<svg[\s\S]*?<\/svg>|<!--[\s\S]*?-->)/).map((seg, i) => {
     if (i % 2) return seg;
     seg = seg
       .replace(/\$\$([\s\S]+?)\$\$/g, (m, t, off, full) => placeDisplayMath(t, off, full))
@@ -4034,9 +4111,9 @@ function computePageCuts(stage, Hpx){
       const rg = document.createRange(); rg.selectNodeContents(n);
       for (const r of rg.getClientRects()) if (r.height > 0) out.push({ t: r.top - t0, b: r.bottom - t0 });
     }
-    el.querySelectorAll('.katex-display, .katex, img, svg, canvas, .mermaid-svg, pre, figure, tr').forEach(e => {
+    el.querySelectorAll('.katex-display, .katex, img, svg, canvas, .mermaid-svg, .book-diagram, pre, figure, tr').forEach(e => {
       if (e.matches('.katex') && e.closest('.katex-display')) return;
-      if (e.matches('img,svg,canvas') && e.closest('.mermaid-svg,.katex')) return;
+      if (e.matches('img,svg,canvas') && e.closest('.mermaid-svg,.book-diagram,.katex')) return;
       const r = e.getBoundingClientRect();
       if (r.height > 0) out.push({ t: r.top - t0, b: r.bottom - t0 });
     });
@@ -4113,7 +4190,7 @@ function computePageCuts(stage, Hpx){
 }
 
 /* 페이지 단위로 캡처 → PDF / PNG / ZIP 생성 */
-async function makeOutputsFromPages(pagesHtml, infos){
+async function makeOutputsFromPages(pagesHtml, infos, mode = currentConversionMode){
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({ unit:'mm', format:'a4', compress:true });
   const M = 12, W = 210-2*M, H = 297-2*M;
@@ -4127,6 +4204,21 @@ async function makeOutputsFromPages(pagesHtml, infos){
     for (let i=0;i<pagesHtml.length;i++){
       $('pStatus').textContent = `렌더링 및 변환 중 ${i+1}/${pagesHtml.length}`;
       stage.innerHTML = pagesHtml[i] || '&nbsp;';
+      if (mode === 'precision' && window.PrecisionModule) {
+        await window.PrecisionModule.hydrateDiagrams(stage);
+      } else if (window.renderMathInElement) {
+        renderMathInElement(stage, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false },
+            { left: '\\[', right: '\\]', display: true }
+          ],
+          ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code', 'svg', 'annotation', 'annotation-xml'],
+          throwOnError: false,
+          strict: false
+        });
+      }
       const imgs = [...stage.querySelectorAll('img')].filter(im => !im.complete);
       if (imgs.length) {
         await Promise.all(imgs.map(im => new Promise(res => {
@@ -4136,6 +4228,15 @@ async function makeOutputsFromPages(pagesHtml, infos){
       }
       await sleep(0);
       fitWideMath(stage);
+      stage.querySelectorAll('svg').forEach(svg => {
+        if (svg.closest('.katex')) return;
+        if (!svg.getAttribute('xmlns')) svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        const rect = svg.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          svg.setAttribute('width', String(Math.round(rect.width)));
+          svg.setAttribute('height', String(Math.round(rect.height)));
+        }
+      });
       const Hpx = stage.offsetWidth * H / W;
       const bounds = [...computePageCuts(stage, Hpx), stage.offsetHeight];
       const cv = await html2canvas(stage, { scale:2, backgroundColor:'#fff', logging:false });
@@ -4217,28 +4318,223 @@ async function makeOutputsFromPages(pagesHtml, infos){
   } finally { stage.remove(); }
 }
 
-function updateExportFormatUI(){
-  const fmt = $('exportFormat').value;
-  const extMap = { pdf: '.pdf', png: '.png', png_zip: '.zip', html: '.html', md: '.md' };
-  $('outExtHint').textContent = extMap[fmt] || '.pdf';
-  const b = outBlobs[fmt];
-  if (b) {
-    const pgLabel = (fmt === 'pdf' && outPdfPages && outPdfPages !== totalPages)
-      ? `${outPdfPages}페이지 (원본 ${totalPages}페이지)`
-      : `${totalPages}페이지`;
-    $('outSize').textContent = `${fmtSize(b.size)} · ${pgLabel}`;
+function getSafeExportName() {
+  const raw = ($('outName')?.value.trim() || baseName() || 'document')
+    .replace(/\.(?:pdf|png|zip|html?|md)$/i, '')
+    .trim() || 'document';
+  return raw.replace(/[\\/:*?"<>|]+/g, '_');
+}
+
+function updateExportUI(){
+  const metaEl = $('outMeta');
+  if (metaEl) {
+    metaEl.textContent = (outPdfPages && outPdfPages !== totalPages)
+      ? `원본 ${totalPages}쪽 · PDF ${outPdfPages}쪽`
+      : `총 ${totalPages}쪽`;
+  }
+  if ($('szPdf')) $('szPdf').textContent = outBlobs.pdf ? `이미지 · ${fmtSize(outBlobs.pdf.size)}` : '이미지';
+  if ($('lblPng')) $('lblPng').textContent = totalPages > 1 ? 'PNG 한 장' : 'PNG';
+  if ($('szPng')) $('szPng').textContent = outBlobs.png ? `한 개의 이미지 · ${fmtSize(outBlobs.png.size)}` : '한 개의 이미지';
+  if ($('dlPngZip')) {
+    const hasZip = totalPages > 1 && !!outBlobs.png_zip;
+    $('dlPngZip').classList.toggle('hidden', !hasZip);
+    if (hasZip && $('szPngZip')) {
+      $('szPngZip').textContent = `${totalPages}장 .zip · ${fmtSize(outBlobs.png_zip.size)}`;
+    }
+  }
+  if ($('szHtml')) $('szHtml').textContent = outBlobs.html ? `벡터 원본 · ${fmtSize(outBlobs.html.size)}` : '벡터 원본';
+  if ($('szMd')) $('szMd').textContent = outBlobs.md ? `원문 · ${fmtSize(outBlobs.md.size)}` : '원문';
+}
+
+const VALID_PV_MODES = ['single', 'spread'];
+let previewViewMode = VALID_PV_MODES.includes(state.pvMode) ? state.pvMode : 'single';
+let previewPageIdx = 0;
+let previewExpanded = false;
+let previewJumpUntil = 0;
+
+function updatePreviewNavUi(idx, total) {
+  const pageLabel = $('pvPageLabel');
+  const prevBtn = $('pvPrevBtn');
+  const nextBtn = $('pvNextBtn');
+  if (!total) {
+    if (pageLabel) pageLabel.textContent = '0 / 0';
+    if (prevBtn) prevBtn.disabled = true;
+    if (nextBtn) nextBtn.disabled = true;
+    return;
+  }
+  if (previewViewMode === 'spread') {
+    const pairStart = Math.floor(idx / 2) * 2;
+    const pairEnd = Math.min(total - 1, pairStart + 1);
+    if (pageLabel) {
+      pageLabel.textContent = pairStart === pairEnd
+        ? `${pairStart + 1} / ${total}`
+        : `${pairStart + 1}-${pairEnd + 1} / ${total}`;
+    }
+    if (prevBtn) prevBtn.disabled = pairStart <= 0;
+    if (nextBtn) nextBtn.disabled = pairEnd >= total - 1;
+  } else {
+    if (pageLabel) pageLabel.textContent = `${idx + 1} / ${total}`;
+    if (prevBtn) prevBtn.disabled = idx <= 0;
+    if (nextBtn) nextBtn.disabled = idx >= total - 1;
   }
 }
 
-$('exportFormat').onchange = updateExportFormatUI;
+function scrollToPreviewPage(container, pageEl, smooth = false) {
+  if (!container || !pageEl || typeof container.scrollTo !== 'function') return;
+  const cRect = typeof container.getBoundingClientRect === 'function' ? container.getBoundingClientRect() : null;
+  const pRect = typeof pageEl.getBoundingClientRect === 'function' ? pageEl.getBoundingClientRect() : null;
+  if (!cRect || !pRect) return;
+  const padTop = typeof getComputedStyle === 'function' ? (parseFloat(getComputedStyle(container).paddingTop) || 16) : 16;
+  const targetTop = Math.max(0, container.scrollTop + (pRect.top - cRect.top) - padTop);
+  container.scrollTo({ top: targetTop, behavior: smooth ? 'smooth' : 'auto' });
+}
 
-async function buildAndPrint(cache){   // (이름 유지) 인쇄 창 없이 파일만 생성
+function syncPreviewIndicator() {
+  const container = $('previewContainer');
+  if (!container) return;
+  const pages = [...container.querySelectorAll('.page')];
+  const total = pages.length;
+  if (!total) {
+    previewPageIdx = 0;
+    updatePreviewNavUi(0, 0);
+    return;
+  }
+
+  let activeIdx = previewPageIdx;
+  const cRect = typeof container.getBoundingClientRect === 'function' ? container.getBoundingClientRect() : null;
+  if (cRect && cRect.height > 0) {
+    const threshold = cRect.top + 40;
+    const found = pages.findIndex(p => {
+      const r = typeof p.getBoundingClientRect === 'function' ? p.getBoundingClientRect() : null;
+      return r && r.height > 0 && r.bottom > threshold;
+    });
+    if (found >= 0) activeIdx = found;
+  }
+  previewPageIdx = Math.max(0, Math.min(activeIdx, total - 1));
+  updatePreviewNavUi(previewPageIdx, total);
+}
+
+function renderPreviewState(preserveAnchor = false) {
+  const container = $('previewContainer');
+  if (!container) return;
+  const pages = [...container.querySelectorAll('.page')];
+  const total = pages.length;
+
+  if (!VALID_PV_MODES.includes(previewViewMode)) previewViewMode = 'single';
+  container.classList.remove('view-single', 'view-spread', 'is-single-sheet');
+  container.classList.add(`view-${previewViewMode}`);
+  if (previewViewMode === 'spread' && total === 1) {
+    container.classList.add('is-single-sheet');
+  }
+
+  document.querySelectorAll('[data-pv-mode]').forEach(btn => {
+    const active = btn.dataset.pvMode === previewViewMode;
+    btn.classList.toggle('is-active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+
+  const nav = $('previewNav');
+  const metaEl = $('previewMeta');
+  if (metaEl) metaEl.textContent = total ? `총 ${total}쪽` : '';
+  if (nav) nav.classList.toggle('hidden', total <= 1);
+
+  if (preserveAnchor && total && pages[previewPageIdx]) {
+    scrollToPreviewPage(container, pages[previewPageIdx], false);
+  } else if (!preserveAnchor && total) {
+    container.scrollTop = 0;
+  }
+  syncPreviewIndicator();
+}
+
+function setPreviewMode(mode) {
+  if (!VALID_PV_MODES.includes(mode)) return;
+  previewViewMode = mode;
+  state.pvMode = mode;
+  save();
+  const container = $('previewContainer');
+  if (container && container.classList.contains('hidden')) {
+    container.classList.remove('hidden');
+    if ($('previewToggleBtn')) $('previewToggleBtn').textContent = '접기';
+  }
+  renderPreviewState(true);
+}
+
+function stepPreviewPage(delta) {
+  const container = $('previewContainer');
+  if (!container) return;
+  const pages = [...container.querySelectorAll('.page')];
+  const total = pages.length;
+  if (total <= 1) return;
+
+  let targetIdx;
+  if (previewViewMode === 'spread') {
+    const curPairStart = Math.floor(previewPageIdx / 2) * 2;
+    targetIdx = Math.max(0, Math.min(total - 1, curPairStart + delta * 2));
+    if (targetIdx === curPairStart) return;
+  } else {
+    targetIdx = Math.max(0, Math.min(total - 1, previewPageIdx + delta));
+    if (targetIdx === previewPageIdx) return;
+  }
+
+  previewPageIdx = targetIdx;
+  previewJumpUntil = Date.now() + 450;
+  scrollToPreviewPage(container, pages[targetIdx], true);
+  updatePreviewNavUi(targetIdx, total);
+}
+
+function setPreviewExpanded(expanded) {
+  const card = $('previewCard');
+  const container = $('previewContainer');
+  const expandBtn = $('pvExpandBtn');
+  previewExpanded = Boolean(expanded && card && !card.classList.contains('hidden'));
+  if (card) card.classList.toggle('is-expanded', previewExpanded);
+  document.body.classList.toggle('preview-expanded-lock', previewExpanded);
+  if (previewExpanded && container && container.classList.contains('hidden')) {
+    container.classList.remove('hidden');
+    if ($('previewToggleBtn')) $('previewToggleBtn').textContent = '접기';
+  }
+  if (expandBtn) expandBtn.textContent = previewExpanded ? '원래 크기' : '넓게 보기';
+}
+
+async function buildAndPrint(cache, mode = currentConversionMode){   // (이름 유지) 인쇄 창 없이 파일 생성 + 미리보기 반영
   building = true;
+  const activeMode = mode === 'precision' ? 'precision' : 'standard';
   try {
     const infos = preparePages(cache);
-    const pagesHtml = await renderPagesHtml(infos.map(p => p.body));
-    lastPagesHtml = pagesHtml;
     const decos = infos.map((p, i) => pageDeco(p, i, i + 1));
+    const previewContainer = $('previewContainer');
+    let pagesHtml;
+
+    if (activeMode === 'precision' && window.PrecisionModule) {
+      const renderedBodies = infos.map(p => window.PrecisionModule.renderMarkdown(p.body || ''));
+      const tempHost = previewContainer || document.createElement('div');
+      tempHost.innerHTML = renderedBodies.map((h, i) => {
+        const d = decos[i];
+        const hd = d.header ? `<div class="pg-h">${escHtml(d.header)}</div>` : '';
+        const ft = (d.footer || d.num) ? `<div class="pg-f"><span>${escHtml(d.footer)}</span><span>${escHtml(d.num)}</span></div>` : '';
+        return `<section class="page">${hd}<div class="page-body">${h}</div>${ft}</section>`;
+      }).join('');
+      tempHost.querySelectorAll('table > thead').forEach(thead => {
+        const ths = [...thead.querySelectorAll('th')];
+        if (ths.length && ths.every(th => !th.textContent.trim() && !th.querySelector('img,svg,.katex'))) {
+          thead.remove();
+        }
+      });
+      await window.PrecisionModule.hydrateDiagrams(tempHost);
+      pagesHtml = [...tempHost.querySelectorAll('.page-body')].map(el => el.innerHTML);
+    } else {
+      pagesHtml = await renderPagesHtml(infos.map(p => p.body));
+      if (previewContainer) {
+        previewContainer.innerHTML = pagesHtml.map((h, i) => {
+          const d = decos[i];
+          const hd = d.header ? `<div class="pg-h">${escHtml(d.header)}</div>` : '';
+          const ft = (d.footer || d.num) ? `<div class="pg-f"><span>${escHtml(d.footer)}</span><span>${escHtml(d.num)}</span></div>` : '';
+          return `<section class="page">${hd}<div class="page-body">${h}</div>${ft}</section>`;
+        }).join('');
+      }
+    }
+
+    lastPagesHtml = pagesHtml;
     const mdAll = infos.map((p, i) => {
       const d = decos[i];
       const head = d.header ? `*${d.header}*\n\n` : '';
@@ -4253,7 +4549,7 @@ async function buildAndPrint(cache){   // (이름 유지) 인쇄 창 없이 파�
       return `<section class="page">${hd}${h}${ft}</section>`;
     }).join('');
     const htmlDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"><style>${PRINT_CSS}</style></head><body>${sections}</body></html>`;
-    const { pdfBlob, pngBlob, zipBlob, pdfPageCount } = await makeOutputsFromPages(pagesHtml, infos);
+    const { pdfBlob, pngBlob, zipBlob, pdfPageCount } = await makeOutputsFromPages(pagesHtml, infos, activeMode);
     outPdfPages = pdfPageCount || totalPages;
     const mdBlob = new Blob([mdAll], { type:'text/markdown;charset=utf-8' });
     const htmlBlob = new Blob([htmlDoc], { type:'text/html;charset=utf-8' });
@@ -4262,32 +4558,30 @@ async function buildAndPrint(cache){   // (이름 유지) 인쇄 창 없이 파�
     outBlobs = {
       pdf: pdfBlob,
       png: pngBlob,
-      png_zip: zipBlob || pngBlob,
+      png_zip: zipBlob || null,
       md: mdBlob,
       html: htmlBlob
     };
     outUrls = {
       pdf:     pdfBlob ? URL.createObjectURL(pdfBlob) : '',
       png:     pngBlob ? URL.createObjectURL(pngBlob) : '',
-      png_zip: zipBlob ? URL.createObjectURL(zipBlob) : (pngBlob ? URL.createObjectURL(pngBlob) : ''),
+      png_zip: zipBlob ? URL.createObjectURL(zipBlob) : '',
       md:      URL.createObjectURL(mdBlob),
       html:    URL.createObjectURL(htmlBlob)
     };
 
-    const optZip = $('optPngZip');
-    if (optZip) {
-      optZip.disabled = totalPages <= 1;
-      optZip.textContent = totalPages > 1 ? `PNG 이미지 - 페이지별 압축 (${totalPages}장 .zip)` : 'PNG 이미지 - 페이지별 압축 (다중 페이지만)';
-      if (totalPages <= 1 && $('exportFormat').value === 'png_zip') {
-        $('exportFormat').value = 'png';
-      }
-    }
-
     $('outName').value = baseName() + '_변환';
-    updateExportFormatUI();
+    updateExportUI();
     $('resultCard').classList.remove('hidden');
+    if ($('previewCard') && previewContainer) {
+      previewContainer.classList.remove('hidden');
+      if ($('previewToggleBtn')) $('previewToggleBtn').textContent = '접기';
+      $('previewCard').classList.remove('hidden');
+      previewPageIdx = 0;
+      renderPreviewState();
+    }
     $('pStatus').textContent = '완료';
-    log('✅ 파일 생성 완료 – 원하는 형식(PDF / PNG 등)을 선택해 다운로드하세요.');
+    log('✓ 변환 완료 – 원하는 형식으로 저장하거나 인쇄할 수 있습니다.');
     $('resultCard').scrollIntoView({ behavior:'smooth', block:'nearest' });
   } catch(e){ log('✗ 파일 생성 실패: '+e.message); }
   finally {
@@ -4295,24 +4589,128 @@ async function buildAndPrint(cache){   // (이름 유지) 인쇄 창 없이 파�
     if (rebuildQueued){ rebuildQueued = false; rebuildFromCache(); }
   }
 }
+
+async function printViaIframe() {
+  const previewContainer = $('previewContainer');
+  if (!previewContainer || !previewContainer.innerHTML.trim()) {
+    return alert('인쇄할 변환 결과가 없습니다.');
+  }
+
+  if (currentConversionMode === 'precision' && window.PrecisionModule) {
+    await window.PrecisionModule.hydrateDiagrams(previewContainer);
+  }
+
+  const existing = document.getElementById('precisionPrintFrame');
+  if (existing) existing.remove();
+
+  const iframe = document.createElement('iframe');
+  iframe.id = 'precisionPrintFrame';
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:210mm;height:0;border:0;opacity:0;pointer-events:none;';
+  document.body.appendChild(iframe);
+
+  const iframeWin = iframe.contentWindow;
+  const iframeDoc = iframe.contentDocument || iframeWin?.document;
+  if (!iframeWin || !iframeDoc) {
+    iframe.remove();
+    return alert('인쇄 프레임을 초기화할 수 없습니다.');
+  }
+
+  const fileTitle = getSafeExportName();
+  const printableHtml = previewContainer.innerHTML;
+  const katexHref = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';
+  const html = `<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8"><title>${escHtml(fileTitle)}</title><link id="printKatexCss" rel="stylesheet" href="${katexHref}"><style>${PRINT_CSS}</style></head><body>${printableHtml}</body></html>`;
+
+  iframeDoc.open();
+  iframeDoc.write(html);
+  iframeDoc.close();
+
+  const withTimeout = (promise, ms) => Promise.race([promise, new Promise(res => setTimeout(res, ms))]);
+
+  const katexLink = iframeDoc.getElementById('printKatexCss');
+  if (katexLink && !katexLink.sheet) {
+    await withTimeout(new Promise(res => {
+      katexLink.addEventListener('load', res, { once: true });
+      katexLink.addEventListener('error', res, { once: true });
+    }), 3000);
+  }
+
+  const imgs = [...iframeDoc.querySelectorAll('img')].filter(im => !im.complete);
+  if (imgs.length) {
+    await withTimeout(Promise.all(imgs.map(im => new Promise(res => {
+      im.addEventListener('load', res, { once: true });
+      im.addEventListener('error', res, { once: true });
+    }))), 3000);
+  }
+
+  if (iframeWin.document.fonts?.ready) {
+    await withTimeout(iframeWin.document.fonts.ready.catch(() => {}), 3000);
+  }
+
+  await new Promise(res => iframeWin.requestAnimationFrame(() => iframeWin.requestAnimationFrame(res)));
+
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    document.title = APP_DOC_TITLE;
+    iframeWin.removeEventListener('afterprint', cleanup);
+    window.removeEventListener('afterprint', cleanup);
+    setTimeout(() => { if (iframe.parentNode) iframe.remove(); }, 250);
+  };
+  iframeWin.addEventListener('afterprint', cleanup, { once: true });
+  window.addEventListener('afterprint', cleanup, { once: true });
+  setTimeout(cleanup, 60000);
+
+  document.title = fileTitle;
+  iframeWin.focus();
+  iframeWin.print();
+}
+
 function download(kind, ext){
   if (!outUrls[kind]) return;
-  const name = ($('outName').value.trim() || baseName()).replace(/[\\/:*?"<>|]+/g,'_');
-  const a = document.createElement('a'); a.href = outUrls[kind]; a.download = name + '.' + ext;
-  document.body.appendChild(a); a.click(); a.remove();
+  const a = document.createElement('a');
+  a.href = outUrls[kind];
+  a.download = getSafeExportName() + '.' + ext;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
-$('dlMain').onclick = () => {
-  const fmt = $('exportFormat').value;
-  const extMap = { pdf: 'pdf', png: 'png', png_zip: totalPages > 1 ? 'zip' : 'png', html: 'html', md: 'md' };
-  download(fmt, extMap[fmt] || 'pdf');
-};
-$('dlPdf').onclick  = () => { $('exportFormat').value = 'pdf'; updateExportFormatUI(); download('pdf','pdf'); };
-$('dlPng').onclick  = () => {
-  const targetFmt = ($('exportFormat').value === 'png_zip' && totalPages > 1) ? 'png_zip' : 'png';
-  $('exportFormat').value = targetFmt;
-  updateExportFormatUI();
-  download(targetFmt, targetFmt === 'png_zip' ? 'zip' : 'png');
-};
-$('dlMd').onclick   = () => { $('exportFormat').value = 'md'; updateExportFormatUI(); download('md','md'); };
-$('dlHtml').onclick = () => { $('exportFormat').value = 'html'; updateExportFormatUI(); download('html','html'); };
+$('dlPdf').onclick = () => download('pdf', 'pdf');
+$('dlPng').onclick = () => download('png', 'png');
+if ($('dlPngZip')) $('dlPngZip').onclick = () => download('png_zip', 'zip');
+$('dlMd').onclick = () => download('md', 'md');
+$('dlHtml').onclick = () => download('html', 'html');
+if ($('printBtn')) $('printBtn').onclick = printViaIframe;
+
+document.querySelectorAll('[data-pv-mode]').forEach(btn => {
+  btn.onclick = () => setPreviewMode(btn.dataset.pvMode);
+});
+if ($('pvPrevBtn')) $('pvPrevBtn').onclick = () => stepPreviewPage(-1);
+if ($('pvNextBtn')) $('pvNextBtn').onclick = () => stepPreviewPage(1);
+if ($('pvExpandBtn')) $('pvExpandBtn').onclick = () => setPreviewExpanded(!previewExpanded);
+if ($('previewToggleBtn') && $('previewContainer')) {
+  $('previewToggleBtn').onclick = () => {
+    const collapsed = $('previewContainer').classList.toggle('hidden');
+    $('previewToggleBtn').textContent = collapsed ? '펼치기' : '접기';
+    if (collapsed && previewExpanded) setPreviewExpanded(false);
+  };
+}
+if ($('previewContainer')) {
+  let pvScrollRaf = null;
+  $('previewContainer').addEventListener('scroll', () => {
+    if (pvScrollRaf) return;
+    pvScrollRaf = requestAnimationFrame(() => {
+      pvScrollRaf = null;
+      if (Date.now() >= previewJumpUntil) syncPreviewIndicator();
+    });
+  }, { passive: true });
+}
+document.addEventListener('keydown', e => {
+  const card = $('previewCard');
+  if (!card || card.classList.contains('hidden')) return;
+  if (e.key === 'Escape' && previewExpanded) {
+    e.preventDefault();
+    setPreviewExpanded(false);
+  }
+});
 init();
